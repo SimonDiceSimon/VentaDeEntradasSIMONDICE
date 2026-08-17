@@ -1,0 +1,1465 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Gestor de Entradas - Shows en Vivo</title>
+  <style>
+    :root {
+      --bg: #121214;
+      --card-bg: #1e1e24;
+      --accent: #ff4b4b;
+      --accent-hover: #e03e3e;
+      --text: #f0f0f5;
+      --text-muted: #a0a0b0;
+      --border: #33333d;
+      --success: #2ecc71;
+      --warning: #f1c40f;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { background: var(--bg); color: var(--text); padding: 15px; display: flex; flex-direction: column; align-items: center; min-height: 100vh; }
+    
+    /* Top Header / Mode Switcher */
+    .top-bar { width: 100%; max-width: 740px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; background: var(--card-bg); padding: 10px 15px; border-radius: 10px; border: 1px solid var(--border); }
+    
+    /* Filter Tabs */
+    .filter-tabs { display: flex; gap: 8px; margin-bottom: 15px; width: 100%; }
+    .filter-btn { padding: 8px 14px; background: #16161a; border: 1px solid var(--border); color: var(--text-muted); border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-weight: 600; }
+    .filter-btn.active { background: var(--accent); color: white; border-color: var(--accent); }
+
+    .view-container { width: 100%; max-width: 740px; }
+    .card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-bottom: 20px; position: relative; }
+    
+    h1, h2, h3 { margin-bottom: 12px; font-weight: 700; }
+    .status-badge { display: inline-block; padding: 4px 10px; border-radius: 20px; font-size: 0.78rem; font-weight: bold; }
+    .status-active { background: rgba(46, 204, 113, 0.2); color: var(--success); }
+    .status-inactive { background: rgba(160, 160, 176, 0.2); color: var(--text-muted); }
+    .status-past { background: rgba(241, 196, 15, 0.2); color: var(--warning); border: 1px dashed var(--warning); }
+
+    label { display: block; font-size: 0.85rem; color: var(--text-muted); margin-bottom: 6px; font-weight: 600; }
+    input, select, textarea { width: 100%; padding: 11px; background: #16161a; border: 1px solid var(--border); border-radius: 6px; color: var(--text); margin-bottom: 15px; font-size: 0.95rem; }
+    input:focus, select:focus { border-color: var(--accent); outline: none; }
+
+    /* Show Cards */
+    .show-card { background: #18181c; border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin-bottom: 14px; display: flex; flex-direction: column; gap: 10px; }
+    .show-card-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+    .show-card-title { font-size: 1.15rem; font-weight: bold; color: white; }
+    .show-card-stats { display: flex; flex-direction: column; gap: 6px; font-size: 0.88rem; color: var(--text-muted); margin-top: 4px; }
+    .show-card-actions { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+
+    /* Capacity Progress Bar */
+    .progress-bar-bg { width: 100%; height: 8px; background: #2a2a35; border-radius: 4px; overflow: hidden; margin-top: 4px; }
+    .progress-bar-fill { height: 100%; background: var(--success); transition: width 0.3s ease; }
+
+    /* Ticket Item Controls */
+    .ticket-row { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--border); }
+    .ticket-row:last-child { border-bottom: none; }
+    .qty-controls { display: flex; align-items: center; gap: 12px; }
+    .qty-btn { width: 34px; height: 34px; background: var(--border); border: none; color: white; border-radius: 6px; cursor: pointer; font-size: 1.2rem; display: flex; align-items: center; justify-content: center; }
+    .qty-btn:hover { background: #454554; }
+    .qty-value { font-weight: bold; width: 24px; text-align: center; font-size: 1.1rem; }
+
+    /* Total & Alias Box */
+    .total-box { background: #16161a; border: 1px dashed var(--accent); padding: 15px; border-radius: 8px; text-align: center; margin: 20px 0; }
+    .total-amount { font-size: 1.8rem; font-weight: bold; color: var(--accent); margin-top: 4px; }
+
+    .alias-box { display: flex; gap: 10px; align-items: center; background: #16161a; border: 1px solid var(--border); padding: 10px 12px; border-radius: 6px; margin-bottom: 20px; }
+    .alias-text { flex: 1; font-family: monospace; font-size: 1.1rem; color: var(--warning); font-weight: bold; word-break: break-all; }
+    
+    /* Buttons */
+    .btn { width: 100%; padding: 12px; background: var(--accent); border: none; border-radius: 6px; color: white; font-weight: bold; cursor: pointer; font-size: 1rem; text-align: center; }
+    .btn:hover { background: var(--accent-hover); }
+    .btn-secondary { background: var(--border); color: var(--text); }
+    .btn-secondary:hover { background: #444452; }
+    .btn-small { width: auto; padding: 6px 12px; font-size: 0.83rem; }
+    .btn-outline { background: transparent; border: 1px solid var(--border); color: var(--text-muted); }
+    .btn-outline:hover { background: rgba(255,255,255,0.05); color: white; }
+
+    /* Table Styles */
+    .table-container { overflow-x: auto; margin-top: 10px; }
+    table { width: 100%; border-collapse: collapse; text-align: left; font-size: 0.88rem; }
+    th, td { padding: 12px 10px; border-bottom: 1px solid var(--border); }
+    th { color: var(--text-muted); font-size: 0.8rem; text-transform: uppercase; }
+    .check-cell { text-align: center; width: 90px; }
+    .check-cell input { width: 22px; height: 22px; margin: 0; cursor: pointer; accent-color: var(--success); }
+
+    /* Door Person Search Cards */
+    .door-search-card { background: #16161a; border: 1px solid var(--border); border-radius: 10px; padding: 14px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .door-search-card.all-entered { border-left: 5px solid var(--success); }
+    .door-search-card.partial-entered { border-left: 5px solid var(--warning); }
+    .door-search-card.none-entered { border-left: 5px solid var(--border); }
+    .door-buyer-name { font-size: 1.15rem; font-weight: bold; color: white; }
+    .door-buyer-detail { font-size: 0.85rem; color: var(--text-muted); margin-top: 4px; }
+    .door-status-tag { font-size: 0.78rem; font-weight: bold; padding: 4px 8px; border-radius: 4px; display: inline-block; }
+    .door-status-tag.all { background: rgba(46, 204, 113, 0.2); color: var(--success); }
+    .door-status-tag.partial { background: rgba(241, 196, 15, 0.2); color: var(--warning); }
+    .door-status-tag.none { background: rgba(160, 160, 176, 0.2); color: var(--text-muted); }
+
+    /* Financial Settlement Styles */
+    .fin-section { border-top: 1px solid var(--border); padding-top: 15px; margin-top: 15px; }
+    .fin-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 8px; }
+    .fin-summary-box { background: #16161a; border: 1px solid var(--border); padding: 15px; border-radius: 8px; margin-top: 15px; }
+    .fin-summary-row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 0.95rem; }
+    .fin-net-profit { font-size: 1.25rem; font-weight: bold; border-top: 1px solid var(--border); padding-top: 10px; margin-top: 6px; }
+
+    /* Notice Box */
+    .notice-box { background: rgba(241, 196, 15, 0.1); border-left: 3px solid var(--warning); padding: 10px 12px; font-size: 0.82rem; color: #e6c875; margin-top: -5px; margin-bottom: 15px; border-radius: 0 4px 4px 0; line-height: 1.4; }
+
+    /* Modal */
+    .modal-overlay { position: fixed; top:0; left:0; right:0; bottom:0; background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; padding: 15px; z-index: 100; }
+    .modal { background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; width: 100%; max-width: 550px; max-height: 90vh; overflow-y: auto; padding: 20px; }
+
+    /* Toast Notification */
+    .toast { position: fixed; bottom: 20px; right: 20px; background: #2ecc71; color: white; padding: 12px 20px; border-radius: 8px; font-weight: bold; box-shadow: 0 4px 12px rgba(0,0,0,0.5); z-index: 200; display: none; }
+
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+
+  <!-- Toast de Notificaciones de Sistema -->
+  <div id="toast" class="toast">Mensaje del sistema</div>
+
+  <!-- Barra de Control de Entorno -->
+  <div class="top-bar">
+    <div style="font-size: 0.85rem; color: var(--text-muted);">
+      Entorno actual: <strong style="color: white;" id="mode-label">Panel Maestro (Administrador)</strong>
+    </div>
+    <button class="btn btn-secondary btn-small" onclick="toggleViewMode()">Cambiar Vista</button>
+  </div>
+
+  <!-- PANTALLA 1: PANEL MAESTRO (ADMINISTRADOR) -->
+  <div id="view-master" class="view-container">
+    
+    <!-- Dashboard Principal de Shows -->
+    <div id="master-dashboard">
+      <div class="card">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+          <h2>Gestión de Shows</h2>
+          <button class="btn btn-small" onclick="openNewShowModal()">+ Crear Nuevo Show</button>
+        </div>
+
+        <!-- Filtro Activos / Inactivos -->
+        <div class="filter-tabs">
+          <button class="filter-btn active" id="filter-active" onclick="setDashboardFilter('active')">Shows Activos (<span id="count-active">0</span>)</button>
+          <button class="filter-btn" id="filter-inactive" onclick="setDashboardFilter('inactive')">Inactivos / Archivados (<span id="count-inactive">0</span>)</button>
+          <button class="filter-btn" id="filter-all" onclick="setDashboardFilter('all')">Todos (<span id="count-all">0</span>)</button>
+        </div>
+
+        <div id="shows-list-container">
+          <!-- Tarjetas de shows generadas dinámicamente -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Detalle del Show Seleccionado y Gestión de Puerta -->
+    <div id="master-show-detail" class="hidden">
+      <button class="btn btn-secondary btn-small" style="margin-bottom: 15px;" onclick="backToDashboard()">← Volver al Listado de Shows</button>
+      
+      <div class="card">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px;">
+          <div>
+            <div style="display: flex; gap: 6px; margin-bottom: 8px;">
+              <span class="status-badge" id="detail-status-badge">● Carga...</span>
+              <span class="status-badge status-past hidden" id="detail-past-badge">⚠️ Show Pasado</span>
+            </div>
+            <h2 id="detail-title">Nombre del Show</h2>
+            <p style="color: var(--text-muted); font-size: 0.88rem;" id="detail-meta">
+              📍 Lugar | 🕒 Horarios
+            </p>
+            <p style="color: var(--warning); font-size: 0.88rem; font-weight: bold; margin-top: 4px;" id="detail-capacity-text">
+              🪑 Ocupación: 0 / 0
+            </p>
+          </div>
+          <div style="display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end;">
+            <button class="btn btn-secondary btn-small" onclick="openDoorSearchMode()">📱 Buscador para Puerta</button>
+            <button class="btn btn-secondary btn-small" onclick="openFinancialModal()">📊 Balance y Liquidación</button>
+            <button class="btn btn-secondary btn-small" onclick="exportDoorListPDF()">📄 PDF Lista Puerta</button>
+            <button class="btn btn-secondary btn-small" onclick="previewCurrentShow()">👁️ Vista Previa</button>
+            <button class="btn btn-secondary btn-small" onclick="editCurrentShow()">Editar</button>
+          </div>
+        </div>
+
+        <div style="background: #16161a; border: 1px solid var(--border); padding: 10px; border-radius: 8px; margin-top: 10px; display: flex; justify-content: space-between; align-items: center; gap: 10px;">
+          <div style="font-size: 0.82rem; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+            Link del comprador: <span id="detail-public-url" style="color: var(--warning); font-family: monospace; font-weight: bold;"></span>
+          </div>
+          <button class="btn btn-small btn-secondary" onclick="copyShowLink()">Copiar Link</button>
+        </div>
+      </div>
+
+      <!-- Tabla de Listado de Puerta (Control de Pago) -->
+      <div class="card">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; flex-wrap: wrap; gap: 10px;">
+          <div>
+            <h3>Listado de Control de Pago</h3>
+            <span style="font-size: 0.8rem; color: var(--text-muted);" id="door-stats">Total: 0 anotados</span>
+          </div>
+          <input type="text" id="door-search" onkeyup="filterDoorList()" placeholder="Buscar por nombre..." style="width: 180px; margin-bottom: 0; padding: 6px 10px;">
+        </div>
+
+        <div class="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>Nombre Completo</th>
+                <th>Entradas Compradas</th>
+                <th>Total</th>
+                <th class="check-cell" title="Confirmación de transferencia recibida">¿Transf.?</th>
+              </tr>
+            </thead>
+            <tbody id="door-table-body">
+              <!-- Filas dinámicas -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- PANTALLA 2: VISTA PÚBLICA DEL COMPRADOR (FORMULARIO WEB) -->
+  <div id="view-public" class="view-container hidden">
+    
+    <!-- Barra superior para simular la apertura de diferentes links -->
+    <div style="background: rgba(255,255,255,0.05); padding: 8px 12px; border-radius: 8px; margin-bottom: 15px; display: flex; align-items: center; gap: 10px; border: 1px solid var(--border);">
+      <span style="font-size: 0.75rem; color: var(--text-muted);">Probando vista del link:</span>
+      <select id="public-show-selector" onchange="loadPublicShow(this.value)" style="margin-bottom: 0; padding: 4px; font-size: 0.85rem;">
+        <!-- Opciones de shows generadas dinámicamente -->
+      </select>
+    </div>
+
+    <!-- Formulario Web del Comprador -->
+    <div class="card" id="public-card">
+      <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+        <span class="status-badge status-active" id="pub-status-badge">● Venta Abierta</span>
+        <span class="status-badge status-past hidden" id="pub-past-badge">⚠️ Fecha Transcurrida</span>
+      </div>
+      <h1 id="pub-show-title" style="font-size: 1.5rem; margin-top: 8px;">Cargando Show...</h1>
+      
+      <div style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 20px; border-bottom: 1px solid var(--border); padding-bottom: 15px;">
+        <p id="pub-show-place">📍 Lugar: -</p>
+        <p id="pub-show-time">🕒 Apertura: - | Show: -</p>
+      </div>
+
+      <!-- Selector de Entradas Configurable -->
+      <h3 style="font-size: 1.05rem; margin-bottom: 10px;">Seleccioná tus entradas</h3>
+      <div id="pub-tickets-container">
+        <!-- Renglones de tickets -->
+      </div>
+
+      <!-- Total Calculado en Vivo -->
+      <div class="total-box">
+        <label>Monto Total a Transferir</label>
+        <div class="total-amount" id="pub-total-amount">$0</div>
+      </div>
+
+      <!-- Datos para Transferir -->
+      <label>Datos para realizar la transferencia (Alias / CBU)</label>
+      <div class="alias-box">
+        <span class="alias-text" id="pub-alias-display">ALIAS.DE.PAGO</span>
+        <button class="btn btn-small btn-secondary" onclick="copyAliasPublic()">Copiar Alias</button>
+      </div>
+
+      <!-- Campo de Nombre + Botón Disparador -->
+      <div style="margin-top: 25px; border-top: 1px solid var(--border); padding-top: 20px;">
+        <label for="pub-buyer-name" style="font-size: 0.95rem; color: var(--text); font-weight: bold;">
+          ¿Con qué nombre te agregamos al listado de puerta?
+        </label>
+        <input type="text" id="pub-buyer-name" placeholder="Ej: Juan Antonio Pérez">
+        
+        <div class="notice-box">
+          ⚠️ <strong>Recomendación:</strong> Por favor colocar <strong>Nombre Completo (o Nombre y Apellido)</strong> de la persona que realiza la transferencia para agilizar el control de ingreso.
+        </div>
+
+        <button class="btn" id="btn-confirm-name" onclick="submitBooking()">Confirmar Nombre</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PANTALLA 3: VISTA BUSCADOR DE PUERTA (DESGLOSADO Y SIN ACENTOS) -->
+  <div id="view-door-search" class="view-container hidden">
+    <button class="btn btn-secondary btn-small" style="margin-bottom: 15px;" onclick="closeDoorSearchMode()">← Volver al Panel Admin</button>
+    
+    <div class="card">
+      <div style="border-bottom: 1px solid var(--border); padding-bottom: 12px; margin-bottom: 15px;">
+        <span style="font-size: 0.75rem; color: var(--accent); font-weight: bold; text-transform: uppercase;">Control de Ingreso en Puerta</span>
+        <h2 id="door-search-title" style="margin-bottom: 4px;">Nombre del Show</h2>
+        <p style="font-size: 0.85rem; color: var(--text-muted);" id="door-search-subtitle">Lugar - Fecha</p>
+      </div>
+
+      <label for="door-fast-input" style="font-size: 0.95rem; color: white;">🔍 Buscador Rápido (Insensible a Acentos):</label>
+      <input type="text" id="door-fast-input" onkeyup="renderDoorSearchCards()" placeholder="Escribí Fernandez, Gonzalez..." style="padding: 14px; font-size: 1.1rem; border-color: var(--accent);">
+
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; font-size: 0.82rem; color: var(--text-muted);">
+        <span id="door-search-count">Mostrando 0 de 0</span>
+      </div>
+
+      <!-- Tarjetas de búsqueda rápida -->
+      <div id="door-search-cards-container">
+        <!-- Tarjetas dinámicas -->
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 1: CREAR / EDITAR SHOW (ADMINISTRADOR) -->
+  <div id="modal-show" class="modal-overlay hidden">
+    <div class="modal">
+      <h2 id="modal-title">Configurar Show</h2>
+      
+      <label>Nombre de la Banda / Show</label>
+      <input type="text" id="form-title" placeholder="Ej: Simón Dice en Vivo">
+
+      <div style="display: flex; gap: 10px;">
+        <div style="flex:1;">
+          <label>Fecha del Show (con año)</label>
+          <input type="date" id="form-date-val">
+        </div>
+        <div style="flex:1;">
+          <label>Lugar</label>
+          <input type="text" id="form-place" placeholder="Ej: Club de Música">
+        </div>
+      </div>
+
+      <div style="display: flex; gap: 10px;">
+        <div style="flex:1;">
+          <label>Horario Puerta</label>
+          <input type="text" id="form-time-doors" placeholder="Ej: 21:00 hs">
+        </div>
+        <div style="flex:1;">
+          <label>Horario Show</label>
+          <input type="text" id="form-time-show" placeholder="Ej: 22:00 hs">
+        </div>
+      </div>
+
+      <div style="display: flex; gap: 10px;">
+        <div style="flex:1;">
+          <label>Capacidad / Butacas de la Sala</label>
+          <input type="number" id="form-capacity" placeholder="Ej: 150" min="1">
+        </div>
+        <div style="flex:1;">
+          <label>Estado Manual del Show</label>
+          <select id="form-status">
+            <option value="active">Activo (Venta abierta)</option>
+            <option value="inactive">Inactivo / Archivados</option>
+          </select>
+        </div>
+      </div>
+
+      <label>Alias / CBU de Pago</label>
+      <input type="text" id="form-alias" placeholder="Ej: BANDA.SIMON.DICE">
+
+      <h3 style="font-size: 1rem; margin-top: 10px; margin-bottom: 10px;">Tipos de Entradas y Precios</h3>
+      <div id="form-tickets-list">
+        <!-- Filas de tickets dinámicas -->
+      </div>
+      <button class="btn btn-secondary btn-small" style="margin-bottom: 20px;" onclick="addTicketTypeForm()">+ Agregar Tipo de Entrada</button>
+
+      <div style="display: flex; gap: 10px;">
+        <button class="btn btn-secondary" onclick="closeShowModal()">Cancelar</button>
+        <button class="btn" onclick="saveShowModal()">Guardar Show</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 2: BALANCE FINANCIERO Y LIQUIDACIÓN -->
+  <div id="modal-financial" class="modal-overlay hidden">
+    <div class="modal" style="max-width: 650px;">
+      <h2>📊 Balance y Rendición de Cuentas</h2>
+      <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 15px;" id="fin-show-title">
+        Calculadora de ingresos, egresos y repartición del show.
+      </p>
+
+      <!-- SECCIÓN 1: INGRESOS -->
+      <h3 style="font-size: 1rem; color: var(--success); border-bottom: 1px solid var(--border); padding-bottom: 5px;">
+        1. Ingresos (Entradas + Auspiciantes)
+      </h3>
+      <div style="background: #16161a; padding: 10px; border-radius: 6px; font-size: 0.9rem; margin-bottom: 10px; margin-top: 8px;">
+        🎟️ <strong>Entradas pagadas:</strong> <span id="fin-tickets-revenue">$0</span>
+        <span style="font-size: 0.8rem; color: var(--text-muted);" id="fin-tickets-count">(0 tickets validados)</span>
+      </div>
+
+      <label>Ingresos por Auspiciantes / Sponsors:</label>
+      <div id="fin-sponsors-container">
+        <!-- Filas dinámicas de auspiciantes -->
+      </div>
+      <button class="btn btn-secondary btn-small" style="margin-bottom: 15px;" onclick="addSponsorRow()">+ Agregar Auspiciante</button>
+
+      <!-- SECCIÓN 2: EGRESOS / GASTOS -->
+      <h3 style="font-size: 1rem; color: var(--accent); border-bottom: 1px solid var(--border); padding-bottom: 5px; margin-top: 10px;">
+        2. Egresos / Gastos
+      </h3>
+      <div id="fin-expenses-container" style="margin-top: 8px;">
+        <!-- Filas dinámicas de egresos -->
+      </div>
+      <button class="btn btn-secondary btn-small" style="margin-bottom: 15px;" onclick="addExpenseRow()">+ Agregar Gasto / Ítem</button>
+
+      <!-- SECCIÓN 3: RESULTADO Y DIVISIÓN -->
+      <h3 style="font-size: 1rem; color: var(--warning); border-bottom: 1px solid var(--border); padding-bottom: 5px; margin-top: 10px;">
+        3. Repartición Final
+      </h3>
+      <div style="margin-top: 10px;">
+        <label>¿Entre cuántas personas se divide el sobrante?</label>
+        <input type="number" id="fin-divide-count" value="4" min="1" onchange="calculateFinancials()" onkeyup="calculateFinancials()">
+      </div>
+
+      <!-- CAJA DE RESUMEN -->
+      <div class="fin-summary-box">
+        <div class="fin-summary-row">
+          <span>Ingresos Totales:</span>
+          <strong style="color: var(--success);" id="fin-total-income">$0</strong>
+        </div>
+        <div class="fin-summary-row">
+          <span>Egresos Totales:</span>
+          <strong style="color: var(--accent);" id="fin-total-expenses">$0</strong>
+        </div>
+        <div class="fin-summary-row fin-net-profit">
+          <span>Ganancia / Balance Neto:</span>
+          <span id="fin-net-amount" style="color: var(--success);">$0</span>
+        </div>
+        <div class="fin-summary-row" style="margin-top: 8px; font-size: 1.05rem; font-weight: bold; color: var(--warning);">
+          <span>Monto por persona:</span>
+          <span id="fin-per-person">$0</span>
+        </div>
+      </div>
+
+      <div style="display: flex; gap: 10px; margin-top: 20px;">
+        <button class="btn btn-secondary" onclick="closeFinancialModal()">Cerrar</button>
+        <button class="btn btn-secondary" onclick="exportFinancialsPDF()">📄 Exportar Liquidación PDF</button>
+        <button class="btn" onclick="saveFinancials()">Guardar Balance</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // --- HELPER NORMALIZADOR DE ACENTOS Y URLS ---
+    function removeAccents(str) {
+      if (!str) return '';
+      return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+    }
+
+    function getShowSlug(title) {
+      if (!title) return 'concierto';
+      return removeAccents(title).replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+    }
+
+    function getShowPublicUrl(show) {
+      return `https://simondice.app/entradas/${getShowSlug(show.title)}`;
+    }
+
+    function isShowPast(dateString) {
+      if (!dateString) return false;
+      const showDate = new Date(dateString + 'T23:59:59');
+      const today = new Date();
+      return showDate < today;
+    }
+
+    function formatDateDisplay(dateString) {
+      if (!dateString) return "Fecha sin definir";
+      const parts = dateString.split('-');
+      if (parts.length === 3) {
+        return `${parts[2]}/${parts[1]}/${parts[0]}`;
+      }
+      return dateString;
+    }
+
+    function showToast(message) {
+      const toast = document.getElementById('toast');
+      toast.innerText = message;
+      toast.style.display = 'block';
+      setTimeout(() => { toast.style.display = 'none'; }, 3000);
+    }
+
+    // --- ESTRUCTURA DE DATOS EN MEMORIA ---
+    let currentViewMode = 'master'; // 'master', 'public', 'door-search'
+    let currentFilter = 'active'; // 'active', 'inactive', 'all'
+    let selectedShowId = 1;
+    let editingShowId = null;
+
+    let appData = {
+      shows: [
+        {
+          id: 1,
+          title: "Simón Dice - Fecha de Lanzamiento",
+          dateVal: "2026-11-24",
+          place: "El Galpón Cultural",
+          timeDoors: "21:00 hs",
+          timeShow: "22:00 hs",
+          alias: "SIMON.DICE.PAGO",
+          capacity: 150,
+          status: "active",
+          ticketTypes: [
+            { id: "t1", name: "Anticipada", price: 8000 },
+            { id: "t2", name: "General", price: 10000 },
+            { id: "t3", name: "Promo 2x1", price: 14000 }
+          ],
+          doorList: [
+            { id: "d1", name: "Gonzalo Fernández", detail: "2x Anticipada", ticketCount: 2, ticketsEntered: 1, total: 16000, paid: true },
+            { id: "d2", name: "Mariana Costa", detail: "1x General", ticketCount: 1, ticketsEntered: 1, total: 10000, paid: true },
+            { id: "d3", name: "Lucas 'El Vasco' Rodríguez", detail: "1x Promo 2x1", ticketCount: 1, ticketsEntered: 0, total: 14000, paid: false }
+          ],
+          financials: {
+            sponsors: [
+              { name: "Cervecería Artesanal", amount: 50000 }
+            ],
+            expenses: [
+              { name: "Alquiler de Sala y Sonido", amount: 80000 },
+              { name: "SADAIC / AADI CAPIF", amount: 15000 },
+              { name: "Diseño y Prensa", amount: 10000 }
+            ],
+            divideCount: 4
+          }
+        },
+        {
+          id: 2,
+          title: "Simón Dice - Recital Anterior",
+          dateVal: "2025-05-10",
+          place: "Bar Subterráneo",
+          timeDoors: "20:30 hs",
+          timeShow: "21:30 hs",
+          alias: "SIMON.ACUSTICO",
+          capacity: 80,
+          status: "inactive",
+          ticketTypes: [
+            { id: "t1", name: "Única General", price: 6000 }
+          ],
+          doorList: [
+            { id: "d10", name: "Esteban Quito", detail: "1x Única General", ticketCount: 1, ticketsEntered: 1, total: 6000, paid: true }
+          ],
+          financials: {
+            sponsors: [],
+            expenses: [{ name: "Alquiler", amount: 30000 }],
+            divideCount: 3
+          }
+        }
+      ]
+    };
+
+    let publicQuantities = {};
+
+    // --- INICIALIZACIÓN ---
+    window.onload = function() {
+      renderDashboard();
+      populatePublicShowSelector();
+      if (appData.shows.length > 0) {
+        loadPublicShow(appData.shows[0].id);
+      }
+    };
+
+    // --- NAVEGACIÓN Y CAMBIO DE VISTAS ---
+    function toggleViewMode() {
+      document.getElementById('view-door-search').classList.add('hidden');
+      if (currentViewMode === 'master') {
+        currentViewMode = 'public';
+        document.getElementById('view-master').classList.add('hidden');
+        document.getElementById('view-public').classList.remove('hidden');
+        document.getElementById('mode-label').innerText = "Vista Comprador (Pública)";
+      } else {
+        currentViewMode = 'master';
+        document.getElementById('view-public').classList.add('hidden');
+        document.getElementById('view-master').classList.remove('hidden');
+        document.getElementById('mode-label').innerText = "Panel Maestro (Administrador)";
+        renderDashboard();
+      }
+    }
+
+    function setDashboardFilter(filter) {
+      currentFilter = filter;
+      document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
+      document.getElementById(`filter-${filter}`).classList.add('active');
+      renderDashboard();
+    }
+
+    function backToDashboard() {
+      document.getElementById('master-show-detail').classList.add('hidden');
+      document.getElementById('master-dashboard').classList.remove('hidden');
+      renderDashboard();
+    }
+
+    // --- PANEL MAESTRO (ADMINISTRADOR) ---
+    function renderDashboard() {
+      const container = document.getElementById('shows-list-container');
+      container.innerHTML = '';
+
+      const countActive = appData.shows.filter(s => s.status === 'active').length;
+      const countInactive = appData.shows.filter(s => s.status === 'inactive').length;
+      document.getElementById('count-active').innerText = countActive;
+      document.getElementById('count-inactive').innerText = countInactive;
+      document.getElementById('count-all').innerText = appData.shows.length;
+
+      let filtered = appData.shows;
+      if (currentFilter === 'active') filtered = appData.shows.filter(s => s.status === 'active');
+      if (currentFilter === 'inactive') filtered = appData.shows.filter(s => s.status === 'inactive');
+
+      if (filtered.length === 0) {
+        container.innerHTML = `<p style="color: var(--text-muted); font-size: 0.9rem; text-align: center; padding: 20px 0;">No hay shows en esta sección.</p>`;
+        return;
+      }
+
+      filtered.forEach(show => {
+        const totalTicketsSold = show.doorList.reduce((sum, i) => sum + (i.ticketCount || 1), 0);
+        const capacity = show.capacity || 100;
+        const percentage = Math.min(100, Math.round((totalTicketsSold / capacity) * 100));
+        
+        const publicUrl = getShowPublicUrl(show);
+        const past = isShowPast(show.dateVal);
+
+        const card = document.createElement('div');
+        card.className = 'show-card';
+        card.innerHTML = `
+          <div class="show-card-header">
+            <div>
+              <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 4px;">
+                <span class="status-badge ${show.status === 'active' ? 'status-active' : 'status-inactive'}">
+                  ${show.status === 'active' ? '● Show Activo' : '● Inactivo / Archivado'}
+                </span>
+                ${past ? '<span class="status-badge status-past">⚠️ Fecha transcurrida (Pasado)</span>' : ''}
+              </div>
+              <div class="show-card-title">${show.title}</div>
+              <div style="font-size: 0.82rem; color: var(--warning); font-family: monospace; margin-top: 3px;">
+                🔗 ${publicUrl}
+              </div>
+              <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 3px;">
+                📅 ${formatDateDisplay(show.dateVal)} | 📍 ${show.place}
+              </div>
+            </div>
+          </div>
+          <div class="show-card-stats">
+            <div style="display: flex; justify-content: space-between; font-size: 0.85rem;">
+              <span>🪑 Ocupación: <strong>${totalTicketsSold} / ${capacity}</strong> tickets</span>
+              <strong style="color: ${percentage >= 100 ? 'var(--accent)' : 'var(--success)'};">${percentage}%</strong>
+            </div>
+            <div class="progress-bar-bg">
+              <div class="progress-bar-fill" style="width: ${percentage}%; background: ${percentage >= 100 ? 'var(--accent)' : 'var(--success)'}"></div>
+            </div>
+          </div>
+          <div class="show-card-actions">
+            <button class="btn btn-small" onclick="openShowDetail(${show.id})">Gestionar Puerta</button>
+            <button class="btn btn-small btn-secondary" onclick="previewShowDirect(${show.id})">👁️ Vista Previa</button>
+            <button class="btn btn-small btn-outline" onclick="toggleShowStatus(${show.id})">
+              ${show.status === 'active' ? 'Archivar' : 'Activar'}
+            </button>
+            <button class="btn btn-small btn-secondary" onclick="openEditShowModal(${show.id})">Editar</button>
+          </div>
+        `;
+        container.appendChild(card);
+      });
+
+      populatePublicShowSelector();
+    }
+
+    function toggleShowStatus(id) {
+      const show = appData.shows.find(s => s.id === id);
+      if (show) {
+        show.status = (show.status === 'active') ? 'inactive' : 'active';
+        showToast(`Show "${show.title}" cambiado a ${show.status === 'active' ? 'Activo' : 'Inactivo/Archivado'}`);
+        renderDashboard();
+      }
+    }
+
+    function openShowDetail(id) {
+      selectedShowId = id;
+      const show = appData.shows.find(s => s.id === id);
+      if (!show) return;
+
+      document.getElementById('master-dashboard').classList.add('hidden');
+      document.getElementById('master-show-detail').classList.remove('hidden');
+
+      const totalTicketsSold = show.doorList.reduce((sum, i) => sum + (i.ticketCount || 1), 0);
+      const capacity = show.capacity || 100;
+      const percentage = Math.min(100, Math.round((totalTicketsSold / capacity) * 100));
+
+      document.getElementById('detail-title').innerText = show.title;
+      document.getElementById('detail-meta').innerText = `📅 ${formatDateDisplay(show.dateVal)} | 📍 ${show.place} | 🕒 Puertas: ${show.timeDoors} - Show: ${show.timeShow}`;
+      document.getElementById('detail-capacity-text').innerText = `🪑 Ocupación de sala: ${totalTicketsSold} / ${capacity} tickets (${percentage}%)`;
+
+      const badge = document.getElementById('detail-status-badge');
+      badge.className = `status-badge ${show.status === 'active' ? 'status-active' : 'status-inactive'}`;
+      badge.innerText = show.status === 'active' ? '● Show Activo' : '● Inactivo / Archivado';
+
+      const pastBadge = document.getElementById('detail-past-badge');
+      if (isShowPast(show.dateVal)) {
+        pastBadge.classList.remove('hidden');
+      } else {
+        pastBadge.classList.add('hidden');
+      }
+
+      document.getElementById('detail-public-url').innerText = getShowPublicUrl(show);
+
+      renderDoorTable();
+    }
+
+    function renderDoorTable() {
+      const show = appData.shows.find(s => s.id === selectedShowId);
+      if (!show) return;
+
+      const tbody = document.getElementById('door-table-body');
+      tbody.innerHTML = '';
+
+      document.getElementById('door-stats').innerText = `Total: ${show.doorList.length} anotados (${show.doorList.filter(i=>i.paid).length} pagados)`;
+
+      show.doorList.forEach((item, index) => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td><strong>${item.name}</strong></td>
+          <td>${item.detail}</td>
+          <td>$${item.total.toLocaleString('es-AR')}</td>
+          <td class="check-cell">
+            <input type="checkbox" ${item.paid ? 'checked' : ''} onchange="togglePaid(${show.id}, ${index}, this.checked)">
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function togglePaid(showId, itemIndex, isChecked) {
+      const show = appData.shows.find(s => s.id === showId);
+      if (show && show.doorList[itemIndex]) {
+        show.doorList[itemIndex].paid = isChecked;
+      }
+    }
+
+    function filterDoorList() {
+      const query = removeAccents(document.getElementById('door-search').value);
+      const rows = document.getElementById('door-table-body').getElementsByTagName('tr');
+      for (let row of rows) {
+        const nameCell = row.getElementsByTagName('td')[0];
+        if (nameCell) {
+          const name = removeAccents(nameCell.innerText);
+          row.style.display = name.includes(query) ? '' : 'none';
+        }
+      }
+    }
+
+    function copyShowLink() {
+      const url = document.getElementById('detail-public-url').innerText;
+      navigator.clipboard.writeText(url).then(() => {
+        showToast("Link copiado al portapapeles");
+      });
+    }
+
+    function previewShowDirect(id) {
+      selectedShowId = id;
+      loadPublicShow(id);
+      toggleViewMode();
+    }
+
+    function previewCurrentShow() {
+      previewShowDirect(selectedShowId);
+    }
+
+    // --- EXPORTAR PDF PARA PUERTA ---
+    function exportDoorListPDF() {
+      const show = appData.shows.find(s => s.id === selectedShowId);
+      if (!show) return;
+
+      const printWindow = window.open('', '_blank');
+      const formattedDate = formatDateDisplay(show.dateVal);
+      const totalRecaudado = show.doorList.filter(i => i.paid).reduce((sum, item) => sum + item.total, 0);
+
+      const htmlContent = `
+        <!DOCTYPE html>
+        <html lang="es">
+        <head>
+          <meta charset="UTF-8">
+          <title>Listado de Puerta - ${show.title}</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 25px; color: #111; line-height: 1.4; }
+            .header { border-bottom: 2px solid #000; padding-bottom: 12px; margin-bottom: 20px; }
+            .header h1 { margin: 0 0 6px 0; font-size: 20pt; }
+            .meta { font-size: 10pt; color: #444; }
+            .summary-box { background: #f4f4f6; border: 1px solid #ddd; padding: 10px 15px; margin-bottom: 20px; border-radius: 4px; font-size: 10pt; display: flex; justify-content: space-between; }
+            table { width: 100%; border-collapse: collapse; font-size: 10pt; }
+            th, td { border: 1px solid #ccc; padding: 8px 10px; text-align: left; }
+            th { background: #eee; font-weight: bold; }
+            .status-ok { font-weight: bold; color: #27ae60; }
+            .status-pending { color: #e67e22; }
+            .footer { margin-top: 30px; font-size: 8pt; color: #777; text-align: center; border-top: 1px solid #eee; padding-top: 10px; }
+            @media print {
+              body { padding: 0; }
+              button { display: none; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1>Simón Dice - Listado de Ingreso a Puerta</h1>
+            <div class="meta">
+              <strong>Evento:</strong> ${show.title}<br>
+              <strong>Fecha:</strong> ${formattedDate} | <strong>Lugar:</strong> ${show.place}<br>
+              <strong>Horarios:</strong> Puertas: ${show.timeDoors} | Show: ${show.timeShow}
+            </div>
+          </div>
+
+          <div class="summary-box">
+            <span><strong>Total anotados:</strong> ${show.doorList.length} personas</span>
+            <span><strong>Pagos validados:</strong> ${show.doorList.filter(i => i.paid).length}</span>
+            <span><strong>Total recaudado:</strong> $${totalRecaudado.toLocaleString('es-AR')}</span>
+          </div>
+
+          <table>
+            <thead>
+              <tr>
+                <th style="width: 5%;">#</th>
+                <th style="width: 40%;">Nombre Completo</th>
+                <th style="width: 30%;">Entradas Compradas</th>
+                <th style="width: 15%;">Monto</th>
+                <th style="width: 10%;">Estado</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${show.doorList.map((item, idx) => `
+                <tr>
+                  <td>${idx + 1}</td>
+                  <td><strong>${item.name}</strong></td>
+                  <td>${item.detail} (${item.ticketCount || 1} entradas)</td>
+                  <td>$${item.total.toLocaleString('es-AR')}</td>
+                  <td class="${item.paid ? 'status-ok' : 'status-pending'}">
+                    ${item.paid ? 'PAGADO' : 'PENDIENTE'}
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+
+          <div class="footer">
+            Documento generado el ${new Date().toLocaleDateString('es-AR')} - Simón Dice Control de Entradas
+          </div>
+
+          <script>
+            window.onload = function() {
+              window.print();
+            };
+          <\/script>
+        </body>
+        </html>
+      `;
+
+      printWindow.document.write(htmlContent);
+      printWindow.document.close();
+    }
+
+    // --- VISTA MODO BUSCADOR PARA PERSONA EN PUERTA (SIN ACENTOS + INGRESO DESGLOSADO) ---
+    function openDoorSearchMode() {
+      const show = appData.shows.find(s => s.id === selectedShowId);
+      if (!show) return;
+
+      document.getElementById('view-master').classList.add('hidden');
+      document.getElementById('view-public').classList.add('hidden');
+      document.getElementById('view-door-search').classList.remove('hidden');
+
+      document.getElementById('door-search-title').innerText = show.title;
+      document.getElementById('door-search-subtitle').innerText = `📍 ${show.place} | 📅 ${formatDateDisplay(show.dateVal)}`;
+      document.getElementById('door-fast-input').value = '';
+      
+      renderDoorSearchCards();
+    }
+
+    function closeDoorSearchMode() {
+      document.getElementById('view-door-search').classList.add('hidden');
+      document.getElementById('view-master').classList.remove('hidden');
+      renderDoorTable();
+    }
+
+    function renderDoorSearchCards() {
+      const show = appData.shows.find(s => s.id === selectedShowId);
+      if (!show) return;
+
+      const query = removeAccents(document.getElementById('door-fast-input').value);
+      const container = document.getElementById('door-search-cards-container');
+      container.innerHTML = '';
+
+      let list = show.doorList;
+
+      if (query) {
+        list = list.filter(i => removeAccents(i.name).includes(query));
+      }
+
+      document.getElementById('door-search-count').innerText = `Mostrando ${list.length} de ${show.doorList.length}`;
+
+      if (list.length === 0) {
+        container.innerHTML = `<p style="color: var(--text-muted); text-align: center; padding: 25px 0;">No se encontraron personas con ese nombre.</p>`;
+        return;
+      }
+
+      list.forEach((item, index) => {
+        const count = item.ticketCount || 1;
+        const entered = item.ticketsEntered || 0;
+        
+        let cardClass = 'none-entered';
+        let statusTag = `<span class="door-status-tag none">⚪ Ingresaron 0/${count}</span>`;
+
+        if (entered >= count) {
+          cardClass = 'all-entered';
+          statusTag = `<span class="door-status-tag all">✅ INGRESARON TODOS (${entered}/${count})</span>`;
+        } else if (entered > 0) {
+          cardClass = 'partial-entered';
+          statusTag = `<span class="door-status-tag partial">🟡 PARCIAL: Ingresaron ${entered}/${count}</span>`;
+        }
+
+        const card = document.createElement('div');
+        card.className = `door-search-card ${cardClass}`;
+        card.innerHTML = `
+          <div>
+            <div class="door-buyer-name">${item.name}</div>
+            <div class="door-buyer-detail">🎫 ${item.detail}</div>
+            <div style="margin-top: 6px;">${statusTag}</div>
+          </div>
+          <div style="display: flex; align-items: center; gap: 8px; background: #121214; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border);">
+            <span style="font-size: 0.8rem; color: var(--text-muted);">Asistencia:</span>
+            <button class="qty-btn" onclick="updateTicketsEntered(${selectedShowId}, ${index}, -1)">-</button>
+            <span class="qty-value" style="font-size: 1.1rem; color: white;">${entered} / ${count}</span>
+            <button class="qty-btn" onclick="updateTicketsEntered(${selectedShowId}, ${index}, 1)">+</button>
+          </div>
+        `;
+        container.appendChild(card);
+      });
+    }
+
+    function updateTicketsEntered(showId, index, change) {
+      const show = appData.shows.find(s => s.id === showId);
+      if (show && show.doorList[index]) {
+        const item = show.doorList[index];
+        const max = item.ticketCount || 1;
+        const current = item.ticketsEntered || 0;
+        item.ticketsEntered = Math.max(0, Math.min(max, current + change));
+        renderDoorSearchCards();
+      }
+    }
+
+    // --- MÓDULO DE BALANCE FINANCIERO Y LIQUIDACIÓN ---
+    function openFinancialModal() {
+      const show = appData.shows.find(s => s.id === selectedShowId);
+      if (!show) return;
+
+      if (!show.financials) {
+        show.financials = { sponsors: [], expenses: [], divideCount: 4 };
+      }
+
+      document.getElementById('fin-show-title').innerText = `Rendición de cuentas para: ${show.title}`;
+      document.getElementById('fin-divide-count').value = show.financials.divideCount || 4;
+
+      renderSponsorRows();
+      renderExpenseRows();
+      calculateFinancials();
+
+      document.getElementById('modal-financial').classList.remove('hidden');
+    }
+
+    function closeFinancialModal() {
+      document.getElementById('modal-financial').classList.add('hidden');
+    }
+
+    function renderSponsorRows() {
+      const show = appData.shows.find(s => s.id === selectedShowId);
+      const container = document.getElementById('fin-sponsors-container');
+      container.innerHTML = '';
+
+      show.financials.sponsors.forEach((sp, idx) => {
+        const div = document.createElement('div');
+        div.className = 'fin-row';
+        div.innerHTML = `
+          <input type="text" placeholder="Nombre auspiciante / sponsor" class="sp-name" value="${sp.name}" style="margin-bottom:0; flex:2;">
+          <input type="number" placeholder="Monto ($)" class="sp-amount" value="${sp.amount}" onkeyup="calculateFinancials()" onchange="calculateFinancials()" style="margin-bottom:0; flex:1;">
+          <button class="btn btn-secondary btn-small" onclick="this.parentElement.remove(); calculateFinancials();" style="padding:0 10px;">✕</button>
+        `;
+        container.appendChild(div);
+      });
+    }
+
+    function addSponsorRow() {
+      const container = document.getElementById('fin-sponsors-container');
+      const div = document.createElement('div');
+      div.className = 'fin-row';
+      div.innerHTML = `
+        <input type="text" placeholder="Nombre auspiciante / sponsor" class="sp-name" style="margin-bottom:0; flex:2;">
+        <input type="number" placeholder="Monto ($)" class="sp-amount" value="0" onkeyup="calculateFinancials()" onchange="calculateFinancials()" style="margin-bottom:0; flex:1;">
+        <button class="btn btn-secondary btn-small" onclick="this.parentElement.remove(); calculateFinancials();" style="padding:0 10px;">✕</button>
+      `;
+      container.appendChild(div);
+      calculateFinancials();
+    }
+
+    function renderExpenseRows() {
+      const show = appData.shows.find(s => s.id === selectedShowId);
+      const container = document.getElementById('fin-expenses-container');
+      container.innerHTML = '';
+
+      show.financials.expenses.forEach((ex, idx) => {
+        const div = document.createElement('div');
+        div.className = 'fin-row';
+        div.innerHTML = `
+          <input type="text" placeholder="Concepto de gasto (Ej: Sonido)" class="ex-name" value="${ex.name}" style="margin-bottom:0; flex:2;">
+          <input type="number" placeholder="Monto ($)" class="ex-amount" value="${ex.amount}" onkeyup="calculateFinancials()" onchange="calculateFinancials()" style="margin-bottom:0; flex:1;">
+          <button class="btn btn-secondary btn-small" onclick="this.parentElement.remove(); calculateFinancials();" style="padding:0 10px;">✕</button>
+        `;
+        container.appendChild(div);
+      });
+    }
+
+    function addExpenseRow() {
+      const container = document.getElementById('fin-expenses-container');
+      const div = document.createElement('div');
+      div.className = 'fin-row';
+      div.innerHTML = `
+        <input type="text" placeholder="Concepto de gasto (Ej: Sonido)" class="ex-name" style="margin-bottom:0; flex:2;">
+        <input type="number" placeholder="Monto ($)" class="ex-amount" value="0" onkeyup="calculateFinancials()" onchange="calculateFinancials()" style="margin-bottom:0; flex:1;">
+        <button class="btn btn-secondary btn-small" onclick="this.parentElement.remove(); calculateFinancials();" style="padding:0 10px;">✕</button>
+      `;
+      container.appendChild(div);
+      calculateFinancials();
+    }
+
+    function calculateFinancials() {
+      const show = appData.shows.find(s => s.id === selectedShowId);
+      if (!show) return;
+
+      // 1. Calcular entradas pagadas
+      const paidItems = show.doorList.filter(i => i.paid);
+      const ticketRevenue = paidItems.reduce((sum, item) => sum + item.total, 0);
+      const ticketCount = paidItems.reduce((sum, item) => sum + (item.ticketCount || 1), 0);
+
+      document.getElementById('fin-tickets-revenue').innerText = `$${ticketRevenue.toLocaleString('es-AR')}`;
+      document.getElementById('fin-tickets-count').innerText = `(${ticketCount} tickets pagados)`;
+
+      // 2. Calcular sponsors
+      let sponsorTotal = 0;
+      document.querySelectorAll('#fin-sponsors-container .fin-row').forEach(row => {
+        const amt = parseFloat(row.querySelector('.sp-amount').value) || 0;
+        sponsorTotal += amt;
+      });
+
+      // 3. Calcular egresos
+      let expenseTotal = 0;
+      document.querySelectorAll('#fin-expenses-container .fin-row').forEach(row => {
+        const amt = parseFloat(row.querySelector('.ex-amount').value) || 0;
+        expenseTotal += amt;
+      });
+
+      const totalIncome = ticketRevenue + sponsorTotal;
+      const netProfit = totalIncome - expenseTotal;
+      const dividePeople = parseInt(document.getElementById('fin-divide-count').value) || 1;
+      const perPerson = Math.floor(netProfit / Math.max(1, dividePeople));
+
+      document.getElementById('fin-total-income').innerText = `$${totalIncome.toLocaleString('es-AR')}`;
+      document.getElementById('fin-total-expenses').innerText = `$${expenseTotal.toLocaleString('es-AR')}`;
+      
+      const netElem = document.getElementById('fin-net-amount');
+      netElem.innerText = `$${netProfit.toLocaleString('es-AR')}`;
+      netElem.style.color = netProfit >= 0 ? "var(--success)" : "var(--accent)";
+
+      document.getElementById('fin-per-person').innerText = `$${perPerson.toLocaleString('es-AR')} (c/u)`;
+    }
+
+    function saveFinancials() {
+      const show = appData.shows.find(s => s.id === selectedShowId);
+      if (!show) return;
+
+      let sponsors = [];
+      document.querySelectorAll('#fin-sponsors-container .fin-row').forEach(row => {
+        const name = row.querySelector('.sp-name').value.trim();
+        const amount = parseFloat(row.querySelector('.sp-amount').value) || 0;
+        if (name) sponsors.push({ name, amount });
+      });
+
+      let expenses = [];
+      document.querySelectorAll('#fin-expenses-container .fin-row').forEach(row => {
+        const name = row.querySelector('.ex-name').value.trim();
+        const amount = parseFloat(row.querySelector('.ex-amount').value) || 0;
+        if (name) expenses.push({ name, amount });
+      });
+
+      const divideCount = parseInt(document.getElementById('fin-divide-count').value) || 1;
+
+      show.financials = { sponsors, expenses, divideCount };
+
+      showToast("Balance financiero guardado");
+      closeFinancialModal();
+    }
+
+    function exportFinancialsPDF() {
+      saveFinancials();
+      const show = appData.shows.find(s => s.id === selectedShowId);
+      if (!show) return;
+
+      const printWindow = window.open('', '_blank');
+      const paidItems = show.doorList.filter(i => i.paid);
+      const ticketRevenue = paidItems.reduce((sum, item) => sum + item.total, 0);
+      const ticketCount = paidItems.reduce((sum, item) => sum + (item.ticketCount || 1), 0);
+
+      const sponsorTotal = show.financials.sponsors.reduce((sum, s) => sum + s.amount, 0);
+      const totalIncome = ticketRevenue + sponsorTotal;
+      const expenseTotal = show.financials.expenses.reduce((sum, e) => sum + e.amount, 0);
+      const netProfit = totalIncome - expenseTotal;
+      const dividePeople = show.financials.divideCount || 1;
+      const perPerson = Math.floor(netProfit / dividePeople);
+
+      const htmlContent = `
+        <!DOCTYPE html>
+        <html lang="es">
+        <head>
+          <meta charset="UTF-8">
+          <title>Rendición de Cuentas - ${show.title}</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 25px; color: #111; line-height: 1.4; }
+            .header { border-bottom: 2px solid #000; padding-bottom: 12px; margin-bottom: 20px; }
+            .header h1 { margin: 0 0 6px 0; font-size: 18pt; }
+            .meta { font-size: 10pt; color: #444; }
+            h2 { font-size: 12pt; margin-top: 20px; border-bottom: 1px solid #ccc; padding-bottom: 4px; }
+            table { width: 100%; border-collapse: collapse; font-size: 10pt; margin-bottom: 10px; }
+            th, td { border: 1px solid #ccc; padding: 6px 10px; text-align: left; }
+            th { background: #eee; }
+            .summary-card { background: #f8f9fa; border: 2px solid #333; padding: 15px; margin-top: 20px; border-radius: 6px; font-size: 11pt; }
+            .summary-line { display: flex; justify-content: space-between; padding: 4px 0; }
+            .highlight { font-size: 13pt; font-weight: bold; border-top: 1px solid #aaa; padding-top: 8px; margin-top: 6px; }
+            @media print { body { padding: 0; } }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1>Simón Dice - Rendición de Cuentas y Liquidación</h1>
+            <div class="meta">
+              <strong>Evento:</strong> ${show.title}<br>
+              <strong>Fecha:</strong> ${formatDateDisplay(show.dateVal)} | <strong>Lugar:</strong> ${show.place}
+            </div>
+          </div>
+
+          <h2>1. Ingresos</h2>
+          <table>
+            <thead><tr><th>Concepto</th><th>Monto</th></tr></thead>
+            <tbody>
+              <tr><td>Venta de Entradas Validada (${ticketCount} tickets)</td><td>$${ticketRevenue.toLocaleString('es-AR')}</td></tr>
+              ${show.financials.sponsors.map(s => `<tr><td>Sponsorship: ${s.name}</td><td>$${s.amount.toLocaleString('es-AR')}</td></tr>`).join('')}
+              <tr style="background:#eee; font-weight:bold;"><td>TOTAL INGRESOS</td><td>$${totalIncome.toLocaleString('es-AR')}</td></tr>
+            </tbody>
+          </table>
+
+          <h2>2. Egresos / Gastos</h2>
+          <table>
+            <thead><tr><th>Ítem de Gasto</th><th>Monto</th></tr></thead>
+            <tbody>
+              ${show.financials.expenses.map(e => `<tr><td>${e.name}</td><td>$${e.amount.toLocaleString('es-AR')}</td></tr>`).join('')}
+              <tr style="background:#eee; font-weight:bold;"><td>TOTAL EGRESOS</td><td>$${expenseTotal.toLocaleString('es-AR')}</td></tr>
+            </tbody>
+          </table>
+
+          <div class="summary-card">
+            <div class="summary-line"><span>Total Ingresos:</span> <strong>$${totalIncome.toLocaleString('es-AR')}</strong></div>
+            <div class="summary-line"><span>Total Gastos:</span> <strong>$${expenseTotal.toLocaleString('es-AR')}</strong></div>
+            <div class="summary-line highlight"><span>Ganancia / Balance Neto:</span> <strong>$${netProfit.toLocaleString('es-AR')}</strong></div>
+            <div class="summary-line" style="margin-top: 8px; color: #d35400;">
+              <span>Monto a cobrar por persona (dividido entre ${dividePeople}):</span>
+              <strong>$${perPerson.toLocaleString('es-AR')}</strong>
+            </div>
+          </div>
+
+          <script>window.onload = function() { window.print(); };<\/script>
+        </body>
+        </html>
+      `;
+
+      printWindow.document.write(htmlContent);
+      printWindow.document.close();
+    }
+
+    // --- VISTA PÚBLICA (COMPRADOR) ---
+    function populatePublicShowSelector() {
+      const selector = document.getElementById('public-show-selector');
+      selector.innerHTML = '';
+      appData.shows.forEach(s => {
+        const opt = document.createElement('option');
+        opt.value = s.id;
+        opt.innerText = `${s.title} (${getShowPublicUrl(s)})`;
+        selector.appendChild(opt);
+      });
+      if (appData.shows.length > 0) {
+        selector.value = selectedShowId;
+      }
+    }
+
+    function loadPublicShow(showId) {
+      const id = parseInt(showId);
+      const show = appData.shows.find(s => s.id === id);
+      if (!show) return;
+
+      selectedShowId = id;
+      publicQuantities = {};
+
+      document.getElementById('pub-show-title').innerText = show.title;
+      document.getElementById('pub-show-place').innerText = `📍 Lugar: ${show.place} (${formatDateDisplay(show.dateVal)})`;
+      document.getElementById('pub-show-time').innerText = `🕒 Puertas: ${show.timeDoors} | Show: ${show.timeShow}`;
+      document.getElementById('pub-alias-display').innerText = show.alias;
+
+      const badge = document.getElementById('pub-status-badge');
+      const pastBadge = document.getElementById('pub-past-badge');
+      const btnConfirm = document.getElementById('btn-confirm-name');
+
+      if (isShowPast(show.dateVal)) {
+        pastBadge.classList.remove('hidden');
+      } else {
+        pastBadge.classList.add('hidden');
+      }
+
+      if (show.status === 'active') {
+        badge.className = "status-badge status-active";
+        badge.innerText = "● Venta Abierta";
+        btnConfirm.disabled = false;
+        btnConfirm.style.opacity = "1";
+      } else {
+        badge.className = "status-badge status-inactive";
+        badge.innerText = "● Venta Cerrada / Inactivo";
+        btnConfirm.disabled = true;
+        btnConfirm.style.opacity = "0.5";
+      }
+
+      // Renderizar tipos de entradas
+      const container = document.getElementById('pub-tickets-container');
+      container.innerHTML = '';
+
+      show.ticketTypes.forEach(t => {
+        publicQuantities[t.id] = 0;
+
+        const row = document.createElement('div');
+        row.className = 'ticket-row';
+        row.innerHTML = `
+          <div>
+            <div style="font-weight: bold;">${t.name}</div>
+            <small style="color: var(--text-muted);">$${t.price.toLocaleString('es-AR')}</small>
+          </div>
+          <div class="qty-controls">
+            <button class="qty-btn" onclick="changePublicQty('${t.id}', -1, ${t.price})">-</button>
+            <span class="qty-value" id="pub-qty-${t.id}">0</span>
+            <button class="qty-btn" onclick="changePublicQty('${t.id}', 1, ${t.price})">+</button>
+          </div>
+        `;
+        container.appendChild(row);
+      });
+
+      calculatePublicTotal();
+    }
+
+    function changePublicQty(ticketId, change, price) {
+      const show = appData.shows.find(s => s.id === selectedShowId);
+      if (show.status !== 'active') return;
+
+      publicQuantities[ticketId] = Math.max(0, (publicQuantities[ticketId] || 0) + change);
+      document.getElementById(`pub-qty-${ticketId}`).innerText = publicQuantities[ticketId];
+      calculatePublicTotal();
+    }
+
+    function calculatePublicTotal() {
+      const show = appData.shows.find(s => s.id === selectedShowId);
+      if (!show) return;
+
+      let total = 0;
+      show.ticketTypes.forEach(t => {
+        const qty = publicQuantities[t.id] || 0;
+        total += qty * t.price;
+      });
+
+      document.getElementById('pub-total-amount').innerText = `$${total.toLocaleString('es-AR')}`;
+    }
+
+    function copyAliasPublic() {
+      const alias = document.getElementById('pub-alias-display').innerText;
+      navigator.clipboard.writeText(alias).then(() => {
+        showToast("Alias copiado al portapapeles");
+      });
+    }
+
+    function submitBooking() {
+      const show = appData.shows.find(s => s.id === selectedShowId);
+      if (!show || show.status !== 'active') {
+        showToast("La venta para este show no está activa.");
+        return;
+      }
+
+      const name = document.getElementById('pub-buyer-name').value.trim();
+      if (!name) {
+        showToast("Por favor ingresá tu Nombre Completo");
+        return;
+      }
+
+      let details = [];
+      let totalSum = 0;
+      let totalTickets = 0;
+
+      show.ticketTypes.forEach(t => {
+        const qty = publicQuantities[t.id] || 0;
+        if (qty > 0) {
+          details.push(`${qty}x ${t.name}`);
+          totalSum += qty * t.price;
+          totalTickets += qty;
+        }
+      });
+
+      if (totalSum === 0) {
+        showToast("Seleccioná al menos una entrada");
+        return;
+      }
+
+      // Agregar registro al show
+      show.doorList.push({
+        id: "d_" + Date.now(),
+        name: name,
+        detail: details.join(", "),
+        ticketCount: totalTickets,
+        ticketsEntered: 0,
+        total: totalSum,
+        paid: false
+      });
+
+      showToast(`¡Gracias ${name}! Quedaste anotado en la lista de puerta.`);
+
+      // Resetear campos públicos
+      document.getElementById('pub-buyer-name').value = '';
+      loadPublicShow(selectedShowId);
+
+      // Si estamos en entorno maestro, actualizar tabla
+      if (currentViewMode === 'master') {
+        renderDoorTable();
+      }
+    }
+
+    // --- MODAL CREACIÓN / EDICIÓN DE SHOWS (ADMINISTRADOR) ---
+    function openNewShowModal() {
+      editingShowId = null;
+      document.getElementById('modal-title').innerText = "Crear Nuevo Show";
+      document.getElementById('form-title').value = "";
+      document.getElementById('form-date-val').value = new Date().toISOString().split('T')[0];
+      document.getElementById('form-place').value = "";
+      document.getElementById('form-time-doors').value = "21:00 hs";
+      document.getElementById('form-time-show').value = "22:00 hs";
+      document.getElementById('form-capacity').value = 100;
+      document.getElementById('form-alias').value = "";
+      document.getElementById('form-status').value = "active";
+
+      const container = document.getElementById('form-tickets-list');
+      container.innerHTML = '';
+      addTicketTypeForm("General", 10000);
+
+      document.getElementById('modal-show').classList.remove('hidden');
+    }
+
+    function editCurrentShow() {
+      openEditShowModal(selectedShowId);
+    }
+
+    function openEditShowModal(id) {
+      editingShowId = id;
+      const show = appData.shows.find(s => s.id === id);
+      if (!show) return;
+
+      document.getElementById('modal-title').innerText = "Editar Show";
+      document.getElementById('form-title').value = show.title;
+      document.getElementById('form-date-val').value = show.dateVal || "";
+      document.getElementById('form-place').value = show.place;
+      document.getElementById('form-time-doors').value = show.timeDoors;
+      document.getElementById('form-time-show').value = show.timeShow;
+      document.getElementById('form-capacity').value = show.capacity || 100;
+      document.getElementById('form-alias').value = show.alias;
+      document.getElementById('form-status').value = show.status;
+
+      const container = document.getElementById('form-tickets-list');
+      container.innerHTML = '';
+      show.ticketTypes.forEach(t => {
+        addTicketTypeForm(t.name, t.price);
+      });
+
+      document.getElementById('modal-show').classList.remove('hidden');
+    }
+
+    function closeShowModal() {
+      document.getElementById('modal-show').classList.add('hidden');
+    }
+
+    function addTicketTypeForm(name = "", price = "") {
+      const container = document.getElementById('form-tickets-list');
+      const div = document.createElement('div');
+      div.className = 'form-ticket-row';
+      div.style.display = 'flex';
+      div.style.gap = '10px';
+      div.style.marginBottom = '10px';
+      div.innerHTML = `
+        <input type="text" placeholder="Nombre tipo (Ej: Anticipada)" class="t-name" value="${name}" style="margin-bottom:0; flex:2;">
+        <input type="number" placeholder="Precio ($)" class="t-price" value="${price}" style="margin-bottom:0; flex:1;">
+        <button class="btn btn-secondary btn-small" onclick="this.parentElement.remove()" style="padding:0 10px;">✕</button>
+      `;
+      container.appendChild(div);
+    }
+
+    function saveShowModal() {
+      const title = document.getElementById('form-title').value.trim();
+      if (!title) {
+        showToast("Por favor ingresá un nombre para el show.");
+        return;
+      }
+
+      const capacity = parseInt(document.getElementById('form-capacity').value) || 100;
+
+      const ticketRows = document.querySelectorAll('.form-ticket-row');
+      let ticketTypes = [];
+      ticketRows.forEach((row, idx) => {
+        const name = row.querySelector('.t-name').value.trim();
+        const price = parseFloat(row.querySelector('.t-price').value) || 0;
+        if (name) {
+          ticketTypes.push({ id: "t_" + (idx + 1), name: name, price: price });
+        }
+      });
+
+      if (ticketTypes.length === 0) {
+        showToast("Cargá al menos un tipo de entrada.");
+        return;
+      }
+
+      let newId = null;
+
+      if (editingShowId === null) {
+        newId = Date.now();
+        const newShow = {
+          id: newId,
+          title: title,
+          dateVal: document.getElementById('form-date-val').value,
+          place: document.getElementById('form-place').value.trim() || "Por definir",
+          timeDoors: document.getElementById('form-time-doors').value.trim() || "-",
+          timeShow: document.getElementById('form-time-show').value.trim() || "-",
+          alias: document.getElementById('form-alias').value.trim() || "ALIAS.PENDIENTE",
+          capacity: capacity,
+          status: document.getElementById('form-status').value,
+          ticketTypes: ticketTypes,
+          doorList: [],
+          financials: { sponsors: [], expenses: [], divideCount: 4 }
+        };
+        appData.shows.push(newShow);
+        selectedShowId = newId;
+        showToast("Nuevo show creado exitosamente");
+      } else {
+        const show = appData.shows.find(s => s.id === editingShowId);
+        if (show) {
+          show.title = title;
+          show.dateVal = document.getElementById('form-date-val').value;
+          show.place = document.getElementById('form-place').value.trim();
+          show.timeDoors = document.getElementById('form-time-doors').value.trim();
+          show.timeShow = document.getElementById('form-time-show').value.trim();
+          show.alias = document.getElementById('form-alias').value.trim();
+          show.capacity = capacity;
+          show.status = document.getElementById('form-status').value;
+          show.ticketTypes = ticketTypes;
+          showToast("Show actualizado exitosamente");
+        }
+      }
+
+      closeShowModal();
+      renderDashboard();
+      populatePublicShowSelector();
+
+      if (newId !== null) {
+        openShowDetail(newId);
+      } else if (editingShowId !== null && document.getElementById('master-show-detail').classList.contains('hidden') === false) {
+        openShowDetail(editingShowId);
+      }
+    }
+  </script>
+</body>
+</html>
