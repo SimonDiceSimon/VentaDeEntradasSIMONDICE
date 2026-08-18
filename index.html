@@ -36,6 +36,7 @@
     .status-active { background: rgba(46, 204, 113, 0.2); color: var(--success); }
     .status-inactive { background: rgba(160, 160, 176, 0.2); color: var(--text-muted); }
     .status-past { background: rgba(241, 196, 15, 0.2); color: var(--warning); border: 1px dashed var(--warning); }
+    .status-soldout { background: rgba(255, 75, 75, 0.2); color: var(--accent); border: 1px solid var(--accent); }
 
     label { display: block; font-size: 0.85rem; color: var(--text-muted); margin-bottom: 6px; font-weight: 600; }
     input, select, textarea { width: 100%; padding: 11px; background: #16161a; border: 1px solid var(--border); border-radius: 6px; color: var(--text); margin-bottom: 15px; font-size: 0.95rem; }
@@ -117,6 +118,19 @@
 
     .hidden { display: none !important; }
   </style>
+
+  <!-- SCRIPT DE RUTEO INMEDIATO (Elimina el parpadeo de pantalla maestro) -->
+  <script>
+    (function() {
+      var params = new URLSearchParams(window.location.search);
+      if (params.has('show') || params.has('door')) {
+        document.documentElement.classList.add('direct-link-mode');
+        var style = document.createElement('style');
+        style.innerHTML = '#app-top-bar, #view-master, #public-selector-bar { display: none !important; }';
+        document.head.appendChild(style);
+      }
+    })();
+  </script>
 </head>
 <body>
 
@@ -130,7 +144,6 @@
       <div class="cloud-badge" id="cloud-status">☁️ Conectando a la Nube...</div>
     </div>
     <div style="display: flex; gap: 8px;">
-      <button class="btn btn-secondary btn-small" id="btn-config-firebase" onclick="openFirebaseConfigModal()">⚙️ Config Firebase</button>
       <button class="btn btn-secondary btn-small" onclick="toggleViewMode()">Cambiar Vista</button>
     </div>
   </div>
@@ -175,7 +188,7 @@
               📍 Lugar | 🕒 Horarios
             </p>
             <p style="color: var(--warning); font-size: 0.88rem; font-weight: bold; margin-top: 4px;" id="detail-capacity-text">
-              🪑 Ocupación Real (Pagados): 0 / 0
+              🪑 Ocupación Real de Sala: 0 / 0 localidades
             </p>
           </div>
           <div style="display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end;">
@@ -191,7 +204,7 @@
 
         <div style="background: #16161a; border: 1px solid var(--border); padding: 12px; border-radius: 8px; margin-top: 10px; display: flex; flex-direction: column; gap: 10px;">
           <div style="font-size: 0.82rem; color: var(--text-muted);">
-            Link público del comprador: <br>
+            Link público con nombre para compradores: <br>
             <span id="detail-public-url" style="color: var(--warning); font-family: monospace; font-weight: bold; word-break: break-all;"></span>
           </div>
           <div style="display: flex; gap: 8px; flex-wrap: wrap;">
@@ -244,8 +257,9 @@
 
     <!-- Formulario Web del Comprador -->
     <div class="card" id="public-card">
-      <div style="display: flex; justify-content: space-between; align-items: flex-start;">
+      <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 6px;">
         <span class="status-badge status-active" id="pub-status-badge">● Venta Abierta</span>
+        <span class="status-badge status-soldout hidden" id="pub-soldout-badge">⚠️ Capacidad Agotada</span>
         <span class="status-badge status-past hidden" id="pub-past-badge">⚠️ Fecha Transcurrida</span>
       </div>
       <h1 id="pub-show-title" style="font-size: 1.5rem; margin-top: 8px;">Cargando Show...</h1>
@@ -323,40 +337,7 @@
     </div>
   </div>
 
-  <!-- MODAL 1: CONFIGURAR FIREBASE CONFIG (CLAVE) -->
-  <div id="modal-firebase" class="modal-overlay hidden">
-    <div class="modal">
-      <h2>⚙️ Configurar Conexión a Firebase</h2>
-      <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 15px;">
-        Tus credenciales de Firebase han sido guardadas.
-      </p>
-
-      <label>apiKey</label>
-      <input type="text" id="cfg-apiKey" placeholder="AIzaSy...">
-
-      <label>authDomain</label>
-      <input type="text" id="cfg-authDomain" placeholder="tu-proyecto.firebaseapp.com">
-
-      <label>projectId</label>
-      <input type="text" id="cfg-projectId" placeholder="tu-proyecto">
-
-      <label>storageBucket</label>
-      <input type="text" id="cfg-storageBucket" placeholder="tu-proyecto.appspot.com">
-
-      <label>messagingSenderId</label>
-      <input type="text" id="cfg-messagingSenderId" placeholder="1234567890">
-
-      <label>appId</label>
-      <input type="text" id="cfg-appId" placeholder="1:1234567890:web:abc123">
-
-      <div style="display: flex; gap: 10px; margin-top: 15px;">
-        <button class="btn btn-secondary" onclick="closeFirebaseConfigModal()">Cancelar</button>
-        <button class="btn" onclick="saveFirebaseConfigFromModal()">Guardar y Conectar</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- MODAL 2: CREAR / EDITAR SHOW (ADMINISTRADOR) -->
+  <!-- MODAL 1: CREAR / EDITAR SHOW (ADMINISTRADOR) -->
   <div id="modal-show" class="modal-overlay hidden">
     <div class="modal">
       <h2 id="modal-title">Configurar Show</h2>
@@ -404,6 +385,9 @@
       <input type="text" id="form-alias" placeholder="Ej: BANDA.SIMON.DICE">
 
       <h3 style="font-size: 1rem; margin-top: 10px; margin-bottom: 10px;">Tipos de Entradas y Precios</h3>
+      <p style="font-size: 0.78rem; color: var(--text-muted); margin-bottom: 10px;">
+        💡 Si escribís "2x1", "3x2", "Doble" o "Pareja" en el nombre, el sistema asignará automáticamente la cantidad de localidades para el descuento de capacidad.
+      </p>
       <div id="form-tickets-list">
         <!-- Filas de tickets dinámicas -->
       </div>
@@ -416,7 +400,7 @@
     </div>
   </div>
 
-  <!-- MODAL 3: BALANCE FINANCIERO Y LIQUIDACIÓN -->
+  <!-- MODAL 2: BALANCE FINANCIERO Y LIQUIDACIÓN -->
   <div id="modal-financial" class="modal-overlay hidden">
     <div class="modal" style="max-width: 650px;">
       <h2>📊 Balance y Rendición de Cuentas</h2>
@@ -485,12 +469,12 @@
     </div>
   </div>
 
-  <!-- MODAL 4: AGREGAR INVITADOS / PRENSA -->
+  <!-- MODAL 3: AGREGAR INVITADOS / PRENSA -->
   <div id="modal-guest" class="modal-overlay hidden">
     <div class="modal">
       <h2>➕ Agregar Invitado / Prensa</h2>
       <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 15px;">
-        Los invitados se sumarán al listado de puerta con costo $0 y quedarán habilitados directamente.
+        Los invitados se sumarán al listado de puerta con costo $0 y ocuparán localidades del show.
       </p>
 
       <label>Nombre Completo del Invitado</label>
@@ -531,8 +515,8 @@
       onSnapshot 
     } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-    // --- CONFIGURACIÓN DE FIREBASE OFICIAL DE TU PROYECTO ---
-    const defaultFirebaseConfig = {
+    // --- CONFIGURACIÓN DE FIREBASE OFICIAL ---
+    const firebaseConfig = {
       apiKey: "AIzaSyDB2HBANXKk39V7njxfvEj0ElwjesmYJO0",
       authDomain: "ventaentradas-2b0b6.firebaseapp.com",
       projectId: "ventaentradas-2b0b6",
@@ -541,18 +525,6 @@
       appId: "1:395120239980:web:37a2b33c8c334db3a77f49"
     };
 
-    function getFirebaseConfig() {
-      if (typeof __firebase_config !== 'undefined' && __firebase_config) {
-        try { return JSON.parse(__firebase_config); } catch(e){}
-      }
-      const saved = localStorage.getItem('simon_dice_firebase_cfg');
-      if (saved) {
-        try { return JSON.parse(saved); } catch(e){}
-      }
-      return defaultFirebaseConfig;
-    }
-
-    const firebaseConfig = getFirebaseConfig();
     const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 
     let db = null;
@@ -564,7 +536,7 @@
       auth = getAuth(app);
       db = getFirestore(app);
     } catch (e) {
-      console.warn("Error al inicializar Firebase con la configuración enviada", e);
+      console.warn("Error inicializando Firebase:", e);
     }
 
     // --- VARIABLES DE APLICACIÓN ---
@@ -592,8 +564,8 @@
             { id: "t3", name: "Promo 2x1", price: 14000, multiplier: 2 }
           ],
           doorList: [
-            { id: "d1", name: "Gonzalo Fernández", detail: "2x Anticipada", ticketCount: 2, ticketsEntered: 1, total: 16000, paid: true },
-            { id: "d2", name: "Mariana Costa", detail: "1x General", ticketCount: 1, ticketsEntered: 1, total: 10000, paid: true },
+            { id: "d1", name: "Gonzalo Fernández", detail: "2x Anticipada (2 accesos)", ticketCount: 2, ticketsEntered: 1, total: 16000, paid: true },
+            { id: "d2", name: "Mariana Costa", detail: "1x General (1 acceso)", ticketCount: 1, ticketsEntered: 1, total: 10000, paid: true },
             { id: "d3", name: "Lucas 'El Vasco' Rodríguez", detail: "1x Promo 2x1 (2 accesos)", ticketCount: 2, ticketsEntered: 0, total: 14000, paid: false }
           ],
           financials: {
@@ -609,7 +581,26 @@
       ]
     };
 
-    // --- AUTENTICACIÓN Y REALTIME SYNC ---
+    // --- DETECCIÓN DE SLUG PARA NOMBRES EN URL ---
+    window.slugifyTitle = function(title) {
+      if (!title) return 'evento';
+      return window.removeAccents(title)
+        .replace(/[^a-z0-9]/g, '-')
+        .replace(/-+/g, '-')
+        .replace(/^-|-$/g, '');
+    };
+
+    // --- DETECCIÓN AUTOMÁTICA DE MULTIPLICADOR (2x1, 3x2, etc.) ---
+    window.autoDetectMultiplier = function(name) {
+      if (!name) return 1;
+      const clean = window.removeAccents(name.toLowerCase());
+      if (clean.includes('3x2')) return 3;
+      if (clean.includes('4x3')) return 4;
+      if (clean.includes('2x1') || clean.includes('doble') || clean.includes('pareja') || clean.includes('duo')) return 2;
+      return 1;
+    };
+
+    // --- CONEXIÓN A LA NUBE Y SINCRONIZACIÓN EN VIVO ---
     async function initCloudAuth() {
       if (!auth) return;
       try {
@@ -631,9 +622,8 @@
         if (!user) return;
 
         const cloudBadge = document.getElementById('cloud-status');
-        if (cloudBadge) cloudBadge.innerHTML = "🟢 Conectado a la Nube en Vivo";
+        if (cloudBadge) cloudBadge.innerHTML = "🟢 Conectado a la Nube";
 
-        // Colección de datos públicos en Firestore
         const showsCol = collection(db, 'artifacts', appId, 'public', 'data', 'shows');
 
         onSnapshot(showsCol, (snapshot) => {
@@ -649,7 +639,9 @@
             }
           }
         }, (error) => {
-          console.error("Error en sincronización en vivo Firestore:", error);
+          console.error("Error en sincronización en vivo:", error);
+          const cloudBadge = document.getElementById('cloud-status');
+          if (cloudBadge) cloudBadge.innerHTML = "🔴 Modo Local";
         });
       });
     }
@@ -678,7 +670,7 @@
       }
     }
 
-    // --- INICIALIZACIÓN GENERAL ---
+    // --- INICIALIZACIÓN GENERAL Y RUTEO SIN PARPADEO ---
     window.onload = async function() {
       loadDataFromStorage();
       await initCloudAuth();
@@ -694,37 +686,7 @@
       }
     };
 
-    // --- MODAL DE CONFIGURACIÓN FIREBASE ---
-    window.openFirebaseConfigModal = function() {
-      const cfg = getFirebaseConfig();
-      document.getElementById('cfg-apiKey').value = cfg.apiKey || '';
-      document.getElementById('cfg-authDomain').value = cfg.authDomain || '';
-      document.getElementById('cfg-projectId').value = cfg.projectId || '';
-      document.getElementById('cfg-storageBucket').value = cfg.storageBucket || '';
-      document.getElementById('cfg-messagingSenderId').value = cfg.messagingSenderId || '';
-      document.getElementById('cfg-appId').value = cfg.appId || '';
-      document.getElementById('modal-firebase').classList.remove('hidden');
-    };
-
-    window.closeFirebaseConfigModal = function() {
-      document.getElementById('modal-firebase').classList.add('hidden');
-    };
-
-    window.saveFirebaseConfigFromModal = function() {
-      const newCfg = {
-        apiKey: document.getElementById('cfg-apiKey').value.trim(),
-        authDomain: document.getElementById('cfg-authDomain').value.trim(),
-        projectId: document.getElementById('cfg-projectId').value.trim(),
-        storageBucket: document.getElementById('cfg-storageBucket').value.trim(),
-        messagingSenderId: document.getElementById('cfg-messagingSenderId').value.trim(),
-        appId: document.getElementById('cfg-appId').value.trim()
-      };
-      localStorage.setItem('simon_dice_firebase_cfg', JSON.stringify(newCfg));
-      showToast("Configuración guardada. Recargando...");
-      setTimeout(() => location.reload(), 1000);
-    };
-
-    // --- AYUDANTES DE URLS CORTAS ---
+    // --- AYUDANTES DE URLS LINDAS CON NOMBRE DE BANDA ---
     function getBaseUrl() {
       return window.location.href.split('?')[0].split('#')[0];
     }
@@ -732,13 +694,15 @@
     window.getBuyerUrl = function(show) {
       const s = typeof show === 'object' ? show : window.appData.shows.find(item => item.id == show);
       if (!s) return getBaseUrl();
-      return `${getBaseUrl()}?show=${s.id}`;
+      const slug = window.slugifyTitle(s.title);
+      return `${getBaseUrl()}?show=${s.id}&evento=${slug}`;
     };
 
     window.getDoorUrl = function(show) {
       const s = typeof show === 'object' ? show : window.appData.shows.find(item => item.id == show);
       if (!s) return getBaseUrl();
-      return `${getBaseUrl()}?door=${s.id}`;
+      const slug = window.slugifyTitle(s.title);
+      return `${getBaseUrl()}?door=${s.id}&evento=${slug}`;
     };
 
     window.removeAccents = function(str) {
@@ -767,7 +731,7 @@
       setTimeout(() => { toast.style.display = 'none'; }, 3000);
     };
 
-    // --- RUTEO DE URLS CORTAS ---
+    // --- RUTEO DE URLS Y CONTROL DE PANTALLA ---
     window.checkURLParams = function() {
       const urlParams = new URLSearchParams(window.location.search);
       const showParam = urlParams.get('show');
@@ -786,13 +750,6 @@
           window.selectedShowId = show.id;
           window.currentViewMode = 'public';
           loadPublicShow(show.id);
-        } else {
-          document.getElementById('public-card').innerHTML = `
-            <div style="text-align:center; padding: 30px 10px;">
-              <h2 style="color: var(--accent);">⚠️ Buscando show en la nube...</h2>
-              <p style="color: var(--text-muted); margin-top: 10px;">Cargando la información del evento...</p>
-            </div>
-          `;
         }
         return true;
 
@@ -808,13 +765,6 @@
         if (show) {
           window.selectedShowId = show.id;
           openDoorSearchMode();
-        } else {
-          document.getElementById('view-door-search').innerHTML = `
-            <div class="card" style="text-align:center; padding: 30px 10px;">
-              <h2 style="color: var(--accent);">⚠️ Cargando lista de puerta...</h2>
-              <p style="color: var(--text-muted); margin-top: 10px;">Conectando a la nube...</p>
-            </div>
-          `;
         }
         return true;
       }
@@ -904,6 +854,17 @@
       } catch (e) {}
     }
 
+    // --- TOTAL DE LOCALIDADES OCUPADAS ---
+    window.calculateTotalAccessesBooked = function(show) {
+      if (!show || !show.doorList) return 0;
+      return show.doorList.reduce((sum, item) => sum + (item.ticketCount || 1), 0);
+    };
+
+    window.calculatePaidAccesses = function(show) {
+      if (!show || !show.doorList) return 0;
+      return show.doorList.filter(i => i.paid).reduce((sum, item) => sum + (item.ticketCount || 1), 0);
+    };
+
     // --- DASHBOARD PRINCIPAL ---
     window.renderDashboard = function() {
       const container = document.getElementById('shows-list-container');
@@ -925,14 +886,14 @@
       }
 
       filtered.forEach(show => {
-        const paidTicketsSold = show.doorList
-          .filter(i => i.paid)
-          .reduce((sum, i) => sum + (i.ticketCount || 1), 0);
+        const totalAccesses = window.calculateTotalAccessesBooked(show);
+        const paidAccesses = window.calculatePaidAccesses(show);
 
         const capacity = show.capacity || 100;
-        const percentage = Math.min(100, Math.round((paidTicketsSold / capacity) * 100));
+        const percentage = Math.min(100, Math.round((totalAccesses / capacity) * 100));
         const buyerUrl = window.getBuyerUrl(show);
         const past = window.isShowPast(show.dateVal);
+        const isSoldOut = totalAccesses >= capacity;
 
         const card = document.createElement('div');
         card.className = 'show-card';
@@ -943,7 +904,8 @@
                 <span class="status-badge ${show.status === 'active' ? 'status-active' : 'status-inactive'}">
                   ${show.status === 'active' ? '● Show Activo' : '● Inactivo / Archivado'}
                 </span>
-                ${past ? '<span class="status-badge status-past">⚠️ Fecha transcurrida (Pasado)</span>' : ''}
+                ${isSoldOut ? '<span class="status-badge status-soldout">⚠️ Capacidad Agotada</span>' : ''}
+                ${past ? '<span class="status-badge status-past">⚠️ Fecha transcurrida</span>' : ''}
               </div>
               <div class="show-card-title">${show.title}</div>
               <div style="font-size: 0.82rem; color: var(--warning); font-family: monospace; margin-top: 3px; word-break: break-all;">
@@ -956,7 +918,7 @@
           </div>
           <div class="show-card-stats">
             <div style="display: flex; justify-content: space-between; font-size: 0.85rem;">
-              <span>🪑 Ocupación Real: <strong>${paidTicketsSold} / ${capacity}</strong> tickets pagados</span>
+              <span>🪑 Ocupación Real: <strong>${totalAccesses} / ${capacity}</strong> localidades (${paidAccesses} pagadas)</span>
               <strong style="color: ${percentage >= 100 ? 'var(--accent)' : 'var(--success)'};">${percentage}%</strong>
             </div>
             <div class="progress-bar-bg">
@@ -998,16 +960,15 @@
       document.getElementById('master-dashboard').classList.add('hidden');
       document.getElementById('master-show-detail').classList.remove('hidden');
 
-      const paidTicketsSold = show.doorList
-        .filter(i => i.paid)
-        .reduce((sum, i) => sum + (i.ticketCount || 1), 0);
+      const totalAccesses = window.calculateTotalAccessesBooked(show);
+      const paidAccesses = window.calculatePaidAccesses(show);
 
       const capacity = show.capacity || 100;
-      const percentage = Math.min(100, Math.round((paidTicketsSold / capacity) * 100));
+      const percentage = Math.min(100, Math.round((totalAccesses / capacity) * 100));
 
       document.getElementById('detail-title').innerText = show.title;
       document.getElementById('detail-meta').innerText = `📅 ${window.formatDateDisplay(show.dateVal)} | 📍 ${show.place} | 🕒 Puertas: ${show.timeDoors} - Show: ${show.timeShow}`;
-      document.getElementById('detail-capacity-text').innerText = `🪑 Ocupación real de sala (Pagados): ${paidTicketsSold} / ${capacity} tickets (${percentage}%)`;
+      document.getElementById('detail-capacity-text').innerText = `🪑 Ocupación real de sala: ${totalAccesses} / ${capacity} localidades (${paidAccesses} pagadas - ${percentage}%)`;
 
       const badge = document.getElementById('detail-status-badge');
       badge.className = `status-badge ${show.status === 'active' ? 'status-active' : 'status-inactive'}`;
@@ -1035,7 +996,8 @@
       const tbody = document.getElementById('door-table-body');
       tbody.innerHTML = '';
 
-      document.getElementById('door-stats').innerText = `Total: ${show.doorList.length} anotados (${show.doorList.filter(i=>i.paid).length} pagados)`;
+      const totalAccesses = window.calculateTotalAccessesBooked(show);
+      document.getElementById('door-stats').innerText = `Total: ${show.doorList.length} anotados (${totalAccesses} localidades ocupadas, ${show.doorList.filter(i=>i.paid).length} pagados)`;
 
       show.doorList.forEach((item, index) => {
         const tr = document.createElement('tr');
@@ -1064,12 +1026,13 @@
         show.doorList[itemIndex].paid = isChecked;
         window.saveShowToCloud(show);
 
-        const paidTicketsSold = show.doorList.filter(i => i.paid).reduce((sum, i) => sum + (i.ticketCount || 1), 0);
+        const totalAccesses = window.calculateTotalAccessesBooked(show);
+        const paidAccesses = window.calculatePaidAccesses(show);
         const capacity = show.capacity || 100;
-        const percentage = Math.min(100, Math.round((paidTicketsSold / capacity) * 100));
+        const percentage = Math.min(100, Math.round((totalAccesses / capacity) * 100));
 
-        document.getElementById('detail-capacity-text').innerText = `🪑 Ocupación real de sala (Pagados): ${paidTicketsSold} / ${capacity} tickets (${percentage}%)`;
-        document.getElementById('door-stats').innerText = `Total: ${show.doorList.length} anotados (${show.doorList.filter(i=>i.paid).length} pagados)`;
+        document.getElementById('detail-capacity-text').innerText = `🪑 Ocupación real de sala: ${totalAccesses} / ${capacity} localidades (${paidAccesses} pagadas - ${percentage}%)`;
+        document.getElementById('door-stats').innerText = `Total: ${show.doorList.length} anotados (${totalAccesses} localidades ocupadas, ${show.doorList.filter(i=>i.paid).length} pagados)`;
       }
     };
 
@@ -1123,7 +1086,7 @@
       show.doorList.push({
         id: "d_" + Date.now(),
         name: name,
-        detail: `${count}x ${category} (Pase $0)`,
+        detail: `${count}x ${category} (${count} accesos)`,
         ticketCount: count,
         ticketsEntered: 0,
         total: 0,
@@ -1145,6 +1108,7 @@
       const printWindow = window.open('', '_blank');
       const formattedDate = window.formatDateDisplay(show.dateVal);
       const totalRecaudado = show.doorList.filter(i => i.paid).reduce((sum, item) => sum + item.total, 0);
+      const totalAccesses = window.calculateTotalAccessesBooked(show);
 
       const htmlContent = `
         <!DOCTYPE html>
@@ -1177,7 +1141,7 @@
           </div>
 
           <div class="summary-box">
-            <span><strong>Total anotados:</strong> ${show.doorList.length} personas</span>
+            <span><strong>Total anotados:</strong> ${show.doorList.length} compras (${totalAccesses} localidades)</span>
             <span><strong>Pagos validados:</strong> ${show.doorList.filter(i => i.paid).length}</span>
             <span><strong>Total recaudado:</strong> $${totalRecaudado.toLocaleString('es-AR')}</span>
           </div>
@@ -1399,10 +1363,10 @@
 
       const paidItems = show.doorList.filter(i => i.paid);
       const ticketRevenue = paidItems.reduce((sum, item) => sum + item.total, 0);
-      const ticketCount = paidItems.reduce((sum, item) => sum + (item.ticketCount || 1), 0);
+      const paidTicketCount = paidItems.reduce((sum, item) => sum + (item.ticketCount || 1), 0);
 
       document.getElementById('fin-tickets-revenue').innerText = `$${ticketRevenue.toLocaleString('es-AR')}`;
-      document.getElementById('fin-tickets-count').innerText = `(${ticketCount} tickets pagados)`;
+      document.getElementById('fin-tickets-count').innerText = `(${paidTicketCount} accesos validados)`;
 
       let sponsorTotal = 0;
       document.querySelectorAll('#fin-sponsors-container .fin-row').forEach(row => {
@@ -1466,7 +1430,7 @@
       const printWindow = window.open('', '_blank');
       const paidItems = show.doorList.filter(i => i.paid);
       const ticketRevenue = paidItems.reduce((sum, item) => sum + item.total, 0);
-      const ticketCount = paidItems.reduce((sum, item) => sum + (item.ticketCount || 1), 0);
+      const paidTicketCount = paidItems.reduce((sum, item) => sum + (item.ticketCount || 1), 0);
 
       const sponsorTotal = show.financials.sponsors.reduce((sum, s) => sum + s.amount, 0);
       const totalIncome = ticketRevenue + sponsorTotal;
@@ -1509,7 +1473,7 @@
           <table>
             <thead><tr><th>Concepto</th><th>Monto</th></tr></thead>
             <tbody>
-              <tr><td>Venta de Entradas Validada (${ticketCount} accesos)</td><td>$${ticketRevenue.toLocaleString('es-AR')}</td></tr>
+              <tr><td>Venta de Entradas Validada (${paidTicketCount} accesos)</td><td>$${ticketRevenue.toLocaleString('es-AR')}</td></tr>
               ${show.financials.sponsors.map(s => `<tr><td>Sponsorship: ${s.name}</td><td>$${s.amount.toLocaleString('es-AR')}</td></tr>`).join('')}
               <tr style="background:#eee; font-weight:bold;"><td>TOTAL INGRESOS</td><td>$${totalIncome.toLocaleString('es-AR')}</td></tr>
             </tbody>
@@ -1570,23 +1534,31 @@
       document.getElementById('pub-show-title').innerText = show.title;
       document.getElementById('pub-show-place').innerText = `📍 Lugar: ${show.place} (${window.formatDateDisplay(show.dateVal)})`;
       document.getElementById('pub-show-time').innerText = `🕒 Puertas: ${show.timeDoors} | Show: ${show.timeShow}`;
-      document.getElementById('pub-alias-display').innerText = show.alias;
+      document.getElementById('pub-alias-display').innerText = show.alias || "ALIAS.PENDIENTE";
 
       const badge = document.getElementById('pub-status-badge');
+      const soldoutBadge = document.getElementById('pub-soldout-badge');
       const pastBadge = document.getElementById('pub-past-badge');
       const btnConfirm = document.getElementById('btn-confirm-name');
+
+      const totalAccessesBooked = window.calculateTotalAccessesBooked(show);
+      const capacity = show.capacity || 100;
+      const isSoldOut = totalAccessesBooked >= capacity;
 
       if (window.isShowPast(show.dateVal)) pastBadge.classList.remove('hidden');
       else pastBadge.classList.add('hidden');
 
-      if (show.status === 'active') {
+      if (isSoldOut) soldoutBadge.classList.remove('hidden');
+      else soldoutBadge.classList.add('hidden');
+
+      if (show.status === 'active' && !isSoldOut) {
         badge.className = "status-badge status-active";
         badge.innerText = "● Venta Abierta";
         btnConfirm.disabled = false;
         btnConfirm.style.opacity = "1";
       } else {
         badge.className = "status-badge status-inactive";
-        badge.innerText = "● Venta Cerrada / Inactivo";
+        badge.innerText = isSoldOut ? "● Entradas Agotadas" : "● Venta Cerrada / Inactivo";
         btnConfirm.disabled = true;
         btnConfirm.style.opacity = "0.5";
       }
@@ -1622,7 +1594,14 @@
 
     window.changePublicQty = function(ticketId, change) {
       const show = window.appData.shows.find(s => s.id === window.selectedShowId);
-      if (show.status !== 'active') return;
+      if (!show || show.status !== 'active') return;
+
+      const totalAccessesBooked = window.calculateTotalAccessesBooked(show);
+      const capacity = show.capacity || 100;
+      if (totalAccessesBooked >= capacity && change > 0) {
+        showToast("⚠️ La capacidad máxima de la sala ya ha sido alcanzada.");
+        return;
+      }
 
       window.publicQuantities[ticketId] = Math.max(0, (window.publicQuantities[ticketId] || 0) + change);
       document.getElementById(`pub-qty-${ticketId}`).innerText = window.publicQuantities[ticketId];
@@ -1677,7 +1656,7 @@
 
       let details = [];
       let totalSum = 0;
-      let totalTickets = 0;
+      let requestedAccesses = 0;
 
       show.ticketTypes.forEach(t => {
         const qty = window.publicQuantities[t.id] || 0;
@@ -1686,7 +1665,7 @@
           const accesses = qty * mult;
           details.push(`${qty}x ${t.name}${mult > 1 ? ` (${accesses} accesos)` : ''}`);
           totalSum += qty * t.price;
-          totalTickets += accesses;
+          requestedAccesses += accesses;
         }
       });
 
@@ -1695,11 +1674,20 @@
         return;
       }
 
+      // Validación estricta de capacidad real
+      const currentBooked = window.calculateTotalAccessesBooked(show);
+      const capacity = show.capacity || 100;
+      if (currentBooked + requestedAccesses > capacity) {
+        const remaining = Math.max(0, capacity - currentBooked);
+        showToast(`⚠️ Capacidad insuficiente: Solo quedan ${remaining} lugares disponibles.`);
+        return;
+      }
+
       const booking = {
         id: "d_" + Date.now(),
         name: name,
         detail: details.join(", "),
-        ticketCount: totalTickets,
+        ticketCount: requestedAccesses,
         ticketsEntered: 0,
         total: totalSum,
         paid: false
@@ -1754,7 +1742,7 @@
       document.getElementById('form-time-doors').value = show.timeDoors;
       document.getElementById('form-time-show').value = show.timeShow;
       document.getElementById('form-capacity').value = show.capacity || 100;
-      document.getElementById('form-alias').value = show.alias;
+      document.getElementById('form-alias').value = show.alias || "";
       document.getElementById('form-status').value = show.status;
 
       const container = document.getElementById('form-tickets-list');
@@ -1770,7 +1758,7 @@
       document.getElementById('modal-show').classList.add('hidden');
     };
 
-    window.addTicketTypeForm = function(name = "", price = "", multiplier = 1) {
+    window.addTicketTypeForm = function(name = "", price = "", multiplier = null) {
       const container = document.getElementById('form-tickets-list');
       const div = document.createElement('div');
       div.className = 'form-ticket-row';
@@ -1778,16 +1766,27 @@
       div.style.gap = '8px';
       div.style.marginBottom = '10px';
       div.style.flexWrap = 'wrap';
+
+      const initialMult = multiplier || window.autoDetectMultiplier(name);
+
       div.innerHTML = `
-        <input type="text" placeholder="Ej: Promo 2x1" class="t-name" value="${name}" style="margin-bottom:0; flex:2; min-width:130px;">
+        <input type="text" placeholder="Ej: Promo 2x1" class="t-name" value="${name}" oninput="handleTicketNameInput(this)" style="margin-bottom:0; flex:2; min-width:130px;">
         <input type="number" placeholder="Precio ($)" class="t-price" value="${price}" style="margin-bottom:0; flex:1; min-width:80px;">
-        <div style="flex:1; min-width:110px; display:flex; align-items:center; gap:4px;" title="Entradas/personas que incluye cada compra">
+        <div style="flex:1; min-width:110px; display:flex; align-items:center; gap:4px;" title="Localidades/personas que ocupa en la sala cada compra">
           <span style="font-size:0.75rem; color:var(--text-muted);">Accesos:</span>
-          <input type="number" placeholder="Personas" class="t-mult" value="${multiplier}" min="1" style="margin-bottom:0; width:100%;">
+          <input type="number" placeholder="Personas" class="t-mult" value="${initialMult}" min="1" style="margin-bottom:0; width:100%;">
         </div>
         <button class="btn btn-secondary btn-small" onclick="this.parentElement.remove()" style="padding:0 10px;">✕</button>
       `;
       container.appendChild(div);
+    };
+
+    window.handleTicketNameInput = function(inputElem) {
+      const row = inputElem.parentElement;
+      const multInput = row.querySelector('.t-mult');
+      if (multInput) {
+        multInput.value = window.autoDetectMultiplier(inputElem.value);
+      }
     };
 
     window.saveShowModal = function() {
@@ -1804,7 +1803,7 @@
       ticketRows.forEach((row, idx) => {
         const name = row.querySelector('.t-name').value.trim();
         const price = parseFloat(row.querySelector('.t-price').value) || 0;
-        const mult = parseInt(row.querySelector('.t-mult').value) || 1;
+        const mult = parseInt(row.querySelector('.t-mult').value) || window.autoDetectMultiplier(name);
         if (name) {
           ticketTypes.push({ id: "t_" + (idx + 1), name: name, price: price, multiplier: mult });
         }
