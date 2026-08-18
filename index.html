@@ -119,11 +119,11 @@
     .hidden { display: none !important; }
   </style>
 
-  <!-- SCRIPT DE RUTEO INMEDIATO (Elimina el parpadeo de pantalla maestro) -->
+  <!-- SCRIPT DE RUTEO INMEDIATO (Oculta panel admin en el milisegundo 0 si entra por enlace público) -->
   <script>
     (function() {
       var params = new URLSearchParams(window.location.search);
-      if (params.has('show') || params.has('door')) {
+      if (params.has('evento') || params.has('puerta') || params.has('show') || params.has('door')) {
         document.documentElement.classList.add('direct-link-mode');
         var style = document.createElement('style');
         style.innerHTML = '#app-top-bar, #view-master, #public-selector-bar { display: none !important; }';
@@ -188,7 +188,7 @@
               📍 Lugar | 🕒 Horarios
             </p>
             <p style="color: var(--warning); font-size: 0.88rem; font-weight: bold; margin-top: 4px;" id="detail-capacity-text">
-              🪑 Ocupación Real de Sala: 0 / 0 localidades
+              🪑 Ocupación Real de Sala: 0 / 0 localidades pagadas
             </p>
           </div>
           <div style="display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end;">
@@ -231,7 +231,7 @@
                 <th>Nombre Completo</th>
                 <th>Entradas Compradas</th>
                 <th>Total</th>
-                <th class="check-cell" title="Confirmación de transferencia recibida">¿Transf.?</th>
+                <th class="check-cell" title="Confirmación de pago recibido">¿Pagada?</th>
               </tr>
             </thead>
             <tbody id="door-table-body">
@@ -386,7 +386,7 @@
 
       <h3 style="font-size: 1rem; margin-top: 10px; margin-bottom: 10px;">Tipos de Entradas y Precios</h3>
       <p style="font-size: 0.78rem; color: var(--text-muted); margin-bottom: 10px;">
-        💡 Si escribís "2x1", "3x2", "Doble" o "Pareja" en el nombre, el sistema asignará automáticamente la cantidad de localidades para el descuento de capacidad.
+        💡 Si escribís "2x1", "3x2", "Doble" o "Pareja" en el nombre, el sistema asignará automáticamente la cantidad de localidades para el descuento de capacidad una vez que se confirme el pago.
       </p>
       <div id="form-tickets-list">
         <!-- Filas de tickets dinámicas -->
@@ -581,7 +581,12 @@
       ]
     };
 
-    // --- DETECCIÓN DE SLUG PARA NOMBRES EN URL ---
+    window.removeAccents = function(str) {
+      if (!str) return '';
+      return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+    };
+
+    // --- GENERADOR DE SLUG LIMPIO PARA URL (Solo nombre del show) ---
     window.slugifyTitle = function(title) {
       if (!title) return 'evento';
       return window.removeAccents(title)
@@ -686,7 +691,7 @@
       }
     };
 
-    // --- AYUDANTES DE URLS LINDAS CON NOMBRE DE BANDA ---
+    // --- GENERADOR DE ENLACES LINDOS SIN ID NUMÉRICO NI 'show1' ---
     function getBaseUrl() {
       return window.location.href.split('?')[0].split('#')[0];
     }
@@ -695,19 +700,14 @@
       const s = typeof show === 'object' ? show : window.appData.shows.find(item => item.id == show);
       if (!s) return getBaseUrl();
       const slug = window.slugifyTitle(s.title);
-      return `${getBaseUrl()}?show=${s.id}&evento=${slug}`;
+      return `${getBaseUrl()}?evento=${slug}`;
     };
 
     window.getDoorUrl = function(show) {
       const s = typeof show === 'object' ? show : window.appData.shows.find(item => item.id == show);
       if (!s) return getBaseUrl();
       const slug = window.slugifyTitle(s.title);
-      return `${getBaseUrl()}?door=${s.id}&evento=${slug}`;
-    };
-
-    window.removeAccents = function(str) {
-      if (!str) return '';
-      return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+      return `${getBaseUrl()}?puerta=${slug}`;
     };
 
     window.isShowPast = function(dateString) {
@@ -731,14 +731,14 @@
       setTimeout(() => { toast.style.display = 'none'; }, 3000);
     };
 
-    // --- RUTEO DE URLS Y CONTROL DE PANTALLA ---
+    // --- RUTEO INTELIGENTE POR NOMBRE DE EVENTO EN URL ---
     window.checkURLParams = function() {
       const urlParams = new URLSearchParams(window.location.search);
-      const showParam = urlParams.get('show');
-      const doorParam = urlParams.get('door');
+      const eventoParam = urlParams.get('evento') || urlParams.get('show');
+      const puertaParam = urlParams.get('puerta') || urlParams.get('door');
 
-      if (showParam) {
-        const show = window.appData.shows.find(s => s.id == showParam);
+      if (eventoParam) {
+        const show = window.appData.shows.find(s => window.slugifyTitle(s.title) === eventoParam || s.id == eventoParam);
 
         document.getElementById('app-top-bar').classList.add('hidden');
         document.getElementById('public-selector-bar').classList.add('hidden');
@@ -753,8 +753,8 @@
         }
         return true;
 
-      } else if (doorParam) {
-        const show = window.appData.shows.find(s => s.id == doorParam);
+      } else if (puertaParam) {
+        const show = window.appData.shows.find(s => window.slugifyTitle(s.title) === puertaParam || s.id == puertaParam);
 
         document.getElementById('app-top-bar').classList.add('hidden');
         document.getElementById('door-back-admin-btn').classList.add('hidden');
@@ -797,12 +797,12 @@
 
     window.copyBuyerLink = function(showId) {
       const link = window.getBuyerUrl(showId);
-      window.copyTextToClipboard(link, "📲 Link corto para comprador copiado");
+      window.copyTextToClipboard(link, "📲 Link directo para comprador copiado");
     };
 
     window.copyDoorLink = function(showId) {
       const link = window.getDoorUrl(showId);
-      window.copyTextToClipboard(link, "🚪 Link corto para puerta copiado");
+      window.copyTextToClipboard(link, "🚪 Link directo para puerta copiado");
     };
 
     // --- NAVEGACIÓN DE VISTAS ---
@@ -854,15 +854,15 @@
       } catch (e) {}
     }
 
-    // --- TOTAL DE LOCALIDADES OCUPADAS ---
+    // --- CÁLCULO DE LOCALIDADES OCUPADAS (SOLO CONFIRMADAS/PAGADAS) ---
     window.calculateTotalAccessesBooked = function(show) {
       if (!show || !show.doorList) return 0;
-      return show.doorList.reduce((sum, item) => sum + (item.ticketCount || 1), 0);
+      // ÚNICAMENTE se descuentan del cupo total las localidades de compras marcadas como PAGADAS
+      return show.doorList.filter(i => i.paid).reduce((sum, item) => sum + (item.ticketCount || 1), 0);
     };
 
     window.calculatePaidAccesses = function(show) {
-      if (!show || !show.doorList) return 0;
-      return show.doorList.filter(i => i.paid).reduce((sum, item) => sum + (item.ticketCount || 1), 0);
+      return window.calculateTotalAccessesBooked(show);
     };
 
     // --- DASHBOARD PRINCIPAL ---
@@ -886,14 +886,12 @@
       }
 
       filtered.forEach(show => {
-        const totalAccesses = window.calculateTotalAccessesBooked(show);
-        const paidAccesses = window.calculatePaidAccesses(show);
-
+        const paidAccesses = window.calculateTotalAccessesBooked(show);
         const capacity = show.capacity || 100;
-        const percentage = Math.min(100, Math.round((totalAccesses / capacity) * 100));
+        const percentage = Math.min(100, Math.round((paidAccesses / capacity) * 100));
         const buyerUrl = window.getBuyerUrl(show);
         const past = window.isShowPast(show.dateVal);
-        const isSoldOut = totalAccesses >= capacity;
+        const isSoldOut = paidAccesses >= capacity;
 
         const card = document.createElement('div');
         card.className = 'show-card';
@@ -918,7 +916,7 @@
           </div>
           <div class="show-card-stats">
             <div style="display: flex; justify-content: space-between; font-size: 0.85rem;">
-              <span>🪑 Ocupación Real: <strong>${totalAccesses} / ${capacity}</strong> localidades (${paidAccesses} pagadas)</span>
+              <span>🪑 Ocupación Real: <strong>${paidAccesses} / ${capacity}</strong> localidades pagadas</span>
               <strong style="color: ${percentage >= 100 ? 'var(--accent)' : 'var(--success)'};">${percentage}%</strong>
             </div>
             <div class="progress-bar-bg">
@@ -960,15 +958,13 @@
       document.getElementById('master-dashboard').classList.add('hidden');
       document.getElementById('master-show-detail').classList.remove('hidden');
 
-      const totalAccesses = window.calculateTotalAccessesBooked(show);
-      const paidAccesses = window.calculatePaidAccesses(show);
-
+      const paidAccesses = window.calculateTotalAccessesBooked(show);
       const capacity = show.capacity || 100;
-      const percentage = Math.min(100, Math.round((totalAccesses / capacity) * 100));
+      const percentage = Math.min(100, Math.round((paidAccesses / capacity) * 100));
 
       document.getElementById('detail-title').innerText = show.title;
       document.getElementById('detail-meta').innerText = `📅 ${window.formatDateDisplay(show.dateVal)} | 📍 ${show.place} | 🕒 Puertas: ${show.timeDoors} - Show: ${show.timeShow}`;
-      document.getElementById('detail-capacity-text').innerText = `🪑 Ocupación real de sala: ${totalAccesses} / ${capacity} localidades (${paidAccesses} pagadas - ${percentage}%)`;
+      document.getElementById('detail-capacity-text').innerText = `🪑 Ocupación real de sala: ${paidAccesses} / ${capacity} localidades pagadas (${percentage}%)`;
 
       const badge = document.getElementById('detail-status-badge');
       badge.className = `status-badge ${show.status === 'active' ? 'status-active' : 'status-inactive'}`;
@@ -996,8 +992,8 @@
       const tbody = document.getElementById('door-table-body');
       tbody.innerHTML = '';
 
-      const totalAccesses = window.calculateTotalAccessesBooked(show);
-      document.getElementById('door-stats').innerText = `Total: ${show.doorList.length} anotados (${totalAccesses} localidades ocupadas, ${show.doorList.filter(i=>i.paid).length} pagados)`;
+      const paidAccesses = window.calculateTotalAccessesBooked(show);
+      document.getElementById('door-stats').innerText = `Total: ${show.doorList.length} anotados (${paidAccesses} localidades pagadas, ${show.doorList.filter(i=>i.paid).length} pagados)`;
 
       show.doorList.forEach((item, index) => {
         const tr = document.createElement('tr');
@@ -1026,13 +1022,12 @@
         show.doorList[itemIndex].paid = isChecked;
         window.saveShowToCloud(show);
 
-        const totalAccesses = window.calculateTotalAccessesBooked(show);
-        const paidAccesses = window.calculatePaidAccesses(show);
+        const paidAccesses = window.calculateTotalAccessesBooked(show);
         const capacity = show.capacity || 100;
-        const percentage = Math.min(100, Math.round((totalAccesses / capacity) * 100));
+        const percentage = Math.min(100, Math.round((paidAccesses / capacity) * 100));
 
-        document.getElementById('detail-capacity-text').innerText = `🪑 Ocupación real de sala: ${totalAccesses} / ${capacity} localidades (${paidAccesses} pagadas - ${percentage}%)`;
-        document.getElementById('door-stats').innerText = `Total: ${show.doorList.length} anotados (${totalAccesses} localidades ocupadas, ${show.doorList.filter(i=>i.paid).length} pagados)`;
+        document.getElementById('detail-capacity-text').innerText = `🪑 Ocupación real de sala: ${paidAccesses} / ${capacity} localidades pagadas (${percentage}%)`;
+        document.getElementById('door-stats').innerText = `Total: ${show.doorList.length} anotados (${paidAccesses} localidades pagadas, ${show.doorList.filter(i=>i.paid).length} pagados)`;
       }
     };
 
@@ -1108,7 +1103,7 @@
       const printWindow = window.open('', '_blank');
       const formattedDate = window.formatDateDisplay(show.dateVal);
       const totalRecaudado = show.doorList.filter(i => i.paid).reduce((sum, item) => sum + item.total, 0);
-      const totalAccesses = window.calculateTotalAccessesBooked(show);
+      const paidAccesses = window.calculateTotalAccessesBooked(show);
 
       const htmlContent = `
         <!DOCTYPE html>
@@ -1141,7 +1136,7 @@
           </div>
 
           <div class="summary-box">
-            <span><strong>Total anotados:</strong> ${show.doorList.length} compras (${totalAccesses} localidades)</span>
+            <span><strong>Total anotados:</strong> ${show.doorList.length} compras (${paidAccesses} localidades pagadas)</span>
             <span><strong>Pagos validados:</strong> ${show.doorList.filter(i => i.paid).length}</span>
             <span><strong>Total recaudado:</strong> $${totalRecaudado.toLocaleString('es-AR')}</span>
           </div>
@@ -1541,9 +1536,9 @@
       const pastBadge = document.getElementById('pub-past-badge');
       const btnConfirm = document.getElementById('btn-confirm-name');
 
-      const totalAccessesBooked = window.calculateTotalAccessesBooked(show);
+      const paidAccessesBooked = window.calculateTotalAccessesBooked(show);
       const capacity = show.capacity || 100;
-      const isSoldOut = totalAccessesBooked >= capacity;
+      const isSoldOut = paidAccessesBooked >= capacity;
 
       if (window.isShowPast(show.dateVal)) pastBadge.classList.remove('hidden');
       else pastBadge.classList.add('hidden');
@@ -1596,10 +1591,10 @@
       const show = window.appData.shows.find(s => s.id === window.selectedShowId);
       if (!show || show.status !== 'active') return;
 
-      const totalAccessesBooked = window.calculateTotalAccessesBooked(show);
+      const paidAccessesBooked = window.calculateTotalAccessesBooked(show);
       const capacity = show.capacity || 100;
-      if (totalAccessesBooked >= capacity && change > 0) {
-        showToast("⚠️ La capacidad máxima de la sala ya ha sido alcanzada.");
+      if (paidAccessesBooked >= capacity && change > 0) {
+        showToast("⚠️ La capacidad confirmada de la sala ya ha sido alcanzada.");
         return;
       }
 
@@ -1674,12 +1669,12 @@
         return;
       }
 
-      // Validación estricta de capacidad real
-      const currentBooked = window.calculateTotalAccessesBooked(show);
+      // Validación de capacidad respecto a entradas confirmadas/pagadas
+      const paidBooked = window.calculateTotalAccessesBooked(show);
       const capacity = show.capacity || 100;
-      if (currentBooked + requestedAccesses > capacity) {
-        const remaining = Math.max(0, capacity - currentBooked);
-        showToast(`⚠️ Capacidad insuficiente: Solo quedan ${remaining} lugares disponibles.`);
+      if (paidBooked + requestedAccesses > capacity) {
+        const remaining = Math.max(0, capacity - paidBooked);
+        showToast(`⚠️ Capacidad confirmada insuficiente: Solo quedan ${remaining} lugares disponibles.`);
         return;
       }
 
