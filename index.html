@@ -173,6 +173,7 @@
             </p>
           </div>
           <div style="display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end;">
+            <button class="btn btn-secondary btn-small" onclick="refreshShowDetail()">🔄 Actualizar Datos</button>
             <button class="btn btn-secondary btn-small" onclick="openDoorSearchMode()">📱 Buscador para Puerta</button>
             <button class="btn btn-secondary btn-small" onclick="openGuestModal()">➕ Invitados / Prensa</button>
             <button class="btn btn-secondary btn-small" onclick="openFinancialModal()">📊 Balance y Liquidación</button>
@@ -290,7 +291,10 @@
 
   <!-- PANTALLA 3: VISTA BUSCADOR DE PUERTA (DESGLOSADO Y SIN ACENTOS) -->
   <div id="view-door-search" class="view-container hidden">
-    <button id="door-back-admin-btn" class="btn btn-secondary btn-small" style="margin-bottom: 15px; align-self: flex-start;" onclick="closeDoorSearchMode()">← Volver al Panel Admin</button>
+    <div style="display: flex; justify-content: space-between; width: 100%; align-items: center; margin-bottom: 15px;">
+      <button id="door-back-admin-btn" class="btn btn-secondary btn-small" onclick="closeDoorSearchMode()">← Volver al Panel Admin</button>
+      <button class="btn btn-secondary btn-small" onclick="refreshDoorSearch()">🔄 Actualizar Listado</button>
+    </div>
     
     <div class="card">
       <div style="border-bottom: 1px solid var(--border); padding-bottom: 12px; margin-bottom: 15px;">
@@ -472,7 +476,48 @@
   </div>
 
   <script>
-    // --- HELPER NORMALIZADOR DE ACENTOS Y URLS ---
+    // --- HELPER DE CODIFICACIÓN UTF-8 ROBUSTO PARA URLS DE COMPARTIDO ---
+    function encodeShowData(show) {
+      try {
+        const payload = {
+          id: show.id,
+          title: show.title,
+          dateVal: show.dateVal,
+          place: show.place,
+          timeDoors: show.timeDoors,
+          timeShow: show.timeShow,
+          alias: show.alias,
+          capacity: show.capacity,
+          status: show.status,
+          ticketTypes: show.ticketTypes
+        };
+        const jsonStr = JSON.stringify(payload);
+        const bytes = new TextEncoder().encode(jsonStr);
+        let binary = '';
+        for (let i = 0; i < bytes.byteLength; i++) {
+          binary += String.fromCharCode(bytes[i]);
+        }
+        return encodeURIComponent(btoa(binary));
+      } catch(e) {
+        return '';
+      }
+    }
+
+    function decodeShowData(encodedStr) {
+      try {
+        if (!encodedStr) return null;
+        const binary = atob(decodeURIComponent(encodedStr));
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) {
+          bytes[i] = binary.charCodeAt(i);
+        }
+        const jsonStr = new TextDecoder().decode(bytes);
+        return JSON.parse(jsonStr);
+      } catch(e) {
+        return null;
+      }
+    }
+
     function removeAccents(str) {
       if (!str) return '';
       return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
@@ -491,14 +536,16 @@
       const s = typeof show === 'object' ? show : appData.shows.find(item => item.id == show);
       if (!s) return getBaseUrl();
       const slug = getShowSlug(s.title);
-      return `${getBaseUrl()}?show=${s.id}&evento=${slug}`;
+      const data = encodeShowData(s);
+      return `${getBaseUrl()}?show=${s.id}&evento=${slug}&d=${data}`;
     }
 
     function getDoorUrl(show) {
       const s = typeof show === 'object' ? show : appData.shows.find(item => item.id == show);
       if (!s) return getBaseUrl();
       const slug = getShowSlug(s.title);
-      return `${getBaseUrl()}?door=${s.id}&evento=${slug}`;
+      const data = encodeShowData(s);
+      return `${getBaseUrl()}?door=${s.id}&evento=${slug}&d=${data}`;
     }
 
     function isShowPast(dateString) {
@@ -524,7 +571,7 @@
       setTimeout(() => { toast.style.display = 'none'; }, 3000);
     }
 
-    // --- ESTRUCTURA DE DATOS EN MEMORIA Y PERSISTENCIA NAVEGADOR ---
+    // --- ESTRUCTURA DE DATOS Y MEMORIA ---
     let currentViewMode = 'master'; // 'master', 'public', 'door-search'
     let currentFilter = 'active'; // 'active', 'inactive', 'all'
     let selectedShowId = 1;
@@ -543,14 +590,14 @@
           capacity: 150,
           status: "active",
           ticketTypes: [
-            { id: "t1", name: "Anticipada", price: 8000 },
-            { id: "t2", name: "General", price: 10000 },
-            { id: "t3", name: "Promo 2x1", price: 14000 }
+            { id: "t1", name: "Anticipada", price: 8000, multiplier: 1 },
+            { id: "t2", name: "General", price: 10000, multiplier: 1 },
+            { id: "t3", name: "Promo 2x1", price: 14000, multiplier: 2 }
           ],
           doorList: [
             { id: "d1", name: "Gonzalo Fernández", detail: "2x Anticipada", ticketCount: 2, ticketsEntered: 1, total: 16000, paid: true },
             { id: "d2", name: "Mariana Costa", detail: "1x General", ticketCount: 1, ticketsEntered: 1, total: 10000, paid: true },
-            { id: "d3", name: "Lucas 'El Vasco' Rodríguez", detail: "1x Promo 2x1", ticketCount: 1, ticketsEntered: 0, total: 14000, paid: false }
+            { id: "d3", name: "Lucas 'El Vasco' Rodríguez", detail: "1x Promo 2x1 (2 accesos)", ticketCount: 2, ticketsEntered: 0, total: 14000, paid: false }
           ],
           financials: {
             sponsors: [
@@ -562,28 +609,6 @@
               { name: "Diseño y Prensa", amount: 10000 }
             ],
             divideCount: 4
-          }
-        },
-        {
-          id: 2,
-          title: "Simón Dice - Recital Anterior",
-          dateVal: "2025-05-10",
-          place: "Bar Subterráneo",
-          timeDoors: "20:30 hs",
-          timeShow: "21:30 hs",
-          alias: "SIMON.ACUSTICO",
-          capacity: 80,
-          status: "inactive",
-          ticketTypes: [
-            { id: "t1", name: "Única General", price: 6000 }
-          ],
-          doorList: [
-            { id: "d10", name: "Esteban Quito", detail: "1x Única General", ticketCount: 1, ticketsEntered: 1, total: 6000, paid: true }
-          ],
-          financials: {
-            sponsors: [],
-            expenses: [{ name: "Alquiler", amount: 30000 }],
-            divideCount: 3
           }
         }
       ]
@@ -626,16 +651,29 @@
       }
     };
 
-    // --- RUTEO AUTOMÁTICO DE URLS Y AISLAMIENTO DE SEGURIDAD ---
+    // --- RUTEO AUTOMÁTICO DE URLS Y DECODIFICACIÓN ---
     function checkURLParams() {
       const urlParams = new URLSearchParams(window.location.search);
       const showParam = urlParams.get('show');
       const doorParam = urlParams.get('door');
+      const dataParam = urlParams.get('d');
 
       if (showParam) {
-        const show = appData.shows.find(s => s.id == showParam);
+        let show = appData.shows.find(s => s.id == showParam);
         
-        // Ocultar barra admin y selector de shows
+        // Si no está en storage local del dispositivo, decodificar de la URL
+        if (!show && dataParam) {
+          const decoded = decodeShowData(dataParam);
+          if (decoded && decoded.id) {
+            decoded.doorList = decoded.doorList || [];
+            decoded.financials = decoded.financials || { sponsors: [], expenses: [], divideCount: 4 };
+            appData.shows.push(decoded);
+            saveDataToStorage();
+            show = decoded;
+          }
+        }
+
+        // Ocultar barra admin y selector para compradores
         document.getElementById('app-top-bar').classList.add('hidden');
         document.getElementById('public-selector-bar').classList.add('hidden');
         document.getElementById('view-master').classList.add('hidden');
@@ -650,16 +688,27 @@
           document.getElementById('public-card').innerHTML = `
             <div style="text-align:center; padding: 30px 10px;">
               <h2 style="color: var(--accent);">⚠️ Evento no encontrado</h2>
-              <p style="color: var(--text-muted); margin-top: 10px;">El enlace ingresado no corresponde a un show activo o registrado en el sistema.</p>
+              <p style="color: var(--text-muted); margin-top: 10px;">El enlace ingresado es incorrecto o no incluye la información del show.</p>
             </div>
           `;
         }
         return true;
 
       } else if (doorParam) {
-        const show = appData.shows.find(s => s.id == doorParam);
-        
-        // Ocultar barra admin y botón de regresar al panel
+        let show = appData.shows.find(s => s.id == doorParam);
+
+        if (!show && dataParam) {
+          const decoded = decodeShowData(dataParam);
+          if (decoded && decoded.id) {
+            decoded.doorList = decoded.doorList || [];
+            decoded.financials = decoded.financials || { sponsors: [], expenses: [], divideCount: 4 };
+            appData.shows.push(decoded);
+            saveDataToStorage();
+            show = decoded;
+          }
+        }
+
+        // Ocultar barra admin y botón de regresar para personal de puerta
         document.getElementById('app-top-bar').classList.add('hidden');
         document.getElementById('door-back-admin-btn').classList.add('hidden');
         document.getElementById('view-master').classList.add('hidden');
@@ -673,7 +722,7 @@
           document.getElementById('view-door-search').innerHTML = `
             <div class="card" style="text-align:center; padding: 30px 10px;">
               <h2 style="color: var(--accent);">⚠️ Lista de Puerta no encontrada</h2>
-              <p style="color: var(--text-muted); margin-top: 10px;">El enlace ingresado es incorrecto o el show ya fue retirado.</p>
+              <p style="color: var(--text-muted); margin-top: 10px;">El enlace ingresado es incorrecto o el show no está disponible.</p>
             </div>
           `;
         }
@@ -682,7 +731,7 @@
       return false;
     }
 
-    // --- FUNCIONES PARA COPIAR LINKS REALES AL PORTAPAPELES ---
+    // --- COPIAR LINKS REALES CON DATA ---
     function copyTextToClipboard(text, successMsg) {
       if (navigator.clipboard && navigator.clipboard.writeText) {
         navigator.clipboard.writeText(text).then(() => {
@@ -720,7 +769,7 @@
       copyTextToClipboard(link, "🚪 Link de puerta copiado al portapapeles");
     }
 
-    // --- NAVEGACIÓN Y CAMBIO DE VISTAS ---
+    // --- NAVEGACIÓN Y VISTAS ---
     function toggleViewMode() {
       document.getElementById('view-door-search').classList.add('hidden');
       if (currentViewMode === 'master') {
@@ -750,7 +799,7 @@
       renderDashboard();
     }
 
-    // --- PANEL MAESTRO (ADMINISTRADOR) ---
+    // --- PANEL MAESTRO ---
     function renderDashboard() {
       const container = document.getElementById('shows-list-container');
       container.innerHTML = '';
@@ -771,7 +820,7 @@
       }
 
       filtered.forEach(show => {
-        // REGLA: Solo sumar los tickets con transferencia CONFIRMADA (paid === true)
+        // Ocupación Real: Sumar tickets con transferencia confirmada (paid === true)
         const paidTicketsSold = show.doorList
           .filter(i => i.paid)
           .reduce((sum, i) => sum + (i.ticketCount || 1), 0);
@@ -873,6 +922,12 @@
       renderDoorTable();
     }
 
+    function refreshShowDetail() {
+      loadDataFromStorage();
+      openShowDetail(selectedShowId);
+      showToast("🔄 Datos actualizados");
+    }
+
     function renderDoorTable() {
       const show = appData.shows.find(s => s.id === selectedShowId);
       if (!show) return;
@@ -886,7 +941,14 @@
         const tr = document.createElement('tr');
         tr.innerHTML = `
           <td><strong>${item.name}</strong></td>
-          <td>${item.detail}</td>
+          <td>
+            <div style="display:flex; align-items:center; gap:6px;">
+              <span>${item.detail}</span>
+              <span style="font-size:0.75rem; color:var(--text-muted); background:#16161a; padding:2px 6px; border-radius:4px; border:1px solid var(--border);">
+                ${item.ticketCount || 1} accesos
+              </span>
+            </div>
+          </td>
           <td>$${item.total.toLocaleString('es-AR')}</td>
           <td class="check-cell">
             <input type="checkbox" ${item.paid ? 'checked' : ''} onchange="togglePaid(${show.id}, ${index}, this.checked)">
@@ -902,7 +964,6 @@
         show.doorList[itemIndex].paid = isChecked;
         saveDataToStorage();
 
-        // Recalcular estadísticas de ocupación
         const paidTicketsSold = show.doorList.filter(i => i.paid).reduce((sum, i) => sum + (i.ticketCount || 1), 0);
         const capacity = show.capacity || 100;
         const percentage = Math.min(100, Math.round((paidTicketsSold / capacity) * 100));
@@ -934,7 +995,7 @@
       previewShowDirect(selectedShowId);
     }
 
-    // --- AGREGAR INVITADOS Y PRENSA (MODAL ADMIN) ---
+    // --- AGREGAR INVITADOS Y PRENSA ---
     function openGuestModal() {
       document.getElementById('guest-name').value = '';
       document.getElementById('guest-type').value = 'Prensa';
@@ -966,15 +1027,13 @@
         ticketCount: count,
         ticketsEntered: 0,
         total: 0,
-        paid: true // Los pases de invitados quedan validados directamente
+        paid: true
       });
 
       saveDataToStorage();
       showToast(`Invitado ${name} agregado correctamente.`);
       closeGuestModal();
       renderDoorTable();
-
-      // Recalcular el estado en vista detalle
       openShowDetail(selectedShowId);
     }
 
@@ -1004,11 +1063,7 @@
             th { background: #eee; font-weight: bold; }
             .status-ok { font-weight: bold; color: #27ae60; }
             .status-pending { color: #e67e22; }
-            .footer { margin-top: 30px; font-size: 8pt; color: #777; text-align: center; border-top: 1px solid #eee; padding-top: 10px; }
-            @media print {
-              body { padding: 0; }
-              button { display: none; }
-            }
+            @media print { body { padding: 0; } button { display: none; } }
           </style>
         </head>
         <body>
@@ -1032,7 +1087,7 @@
               <tr>
                 <th style="width: 5%;">#</th>
                 <th style="width: 40%;">Nombre Completo</th>
-                <th style="width: 30%;">Entradas Compradas</th>
+                <th style="width: 30%;">Entradas / Accesos</th>
                 <th style="width: 15%;">Monto</th>
                 <th style="width: 10%;">Estado</th>
               </tr>
@@ -1042,7 +1097,7 @@
                 <tr>
                   <td>${idx + 1}</td>
                   <td><strong>${item.name}</strong></td>
-                  <td>${item.detail} (${item.ticketCount || 1} entradas)</td>
+                  <td>${item.detail} (${item.ticketCount || 1} accesos)</td>
                   <td>$${item.total.toLocaleString('es-AR')}</td>
                   <td class="${item.paid ? 'status-ok' : 'status-pending'}">
                     ${item.paid ? 'PAGADO' : 'PENDIENTE'}
@@ -1052,15 +1107,7 @@
             </tbody>
           </table>
 
-          <div class="footer">
-            Documento generado el ${new Date().toLocaleDateString('es-AR')} - Simón Dice Control de Entradas
-          </div>
-
-          <script>
-            window.onload = function() {
-              window.print();
-            };
-          <\/script>
+          <script>window.onload = function() { window.print(); };<\/script>
         </body>
         </html>
       `;
@@ -1069,7 +1116,7 @@
       printWindow.document.close();
     }
 
-    // --- VISTA MODO BUSCADOR PARA PERSONA EN PUERTA (SIN ACENTOS + INGRESO DESGLOSADO) ---
+    // --- BUSCADOR DE PUERTA ---
     function openDoorSearchMode() {
       const show = appData.shows.find(s => s.id === selectedShowId);
       if (!show) return;
@@ -1083,6 +1130,12 @@
       document.getElementById('door-fast-input').value = '';
       
       renderDoorSearchCards();
+    }
+
+    function refreshDoorSearch() {
+      loadDataFromStorage();
+      renderDoorSearchCards();
+      showToast("🔄 Listado actualizado");
     }
 
     function closeDoorSearchMode() {
@@ -1158,7 +1211,7 @@
       }
     }
 
-    // --- MÓDULO DE BALANCE FINANCIERO Y LIQUIDACIÓN ---
+    // --- BALANCE FINANCIERO ---
     function openFinancialModal() {
       const show = appData.shows.find(s => s.id === selectedShowId);
       if (!show) return;
@@ -1186,11 +1239,11 @@
       const container = document.getElementById('fin-sponsors-container');
       container.innerHTML = '';
 
-      show.financials.sponsors.forEach((sp, idx) => {
+      show.financials.sponsors.forEach((sp) => {
         const div = document.createElement('div');
         div.className = 'fin-row';
         div.innerHTML = `
-          <input type="text" placeholder="Nombre auspiciante / sponsor" class="sp-name" value="${sp.name}" style="margin-bottom:0; flex:2;">
+          <input type="text" placeholder="Nombre auspiciante" class="sp-name" value="${sp.name}" style="margin-bottom:0; flex:2;">
           <input type="number" placeholder="Monto ($)" class="sp-amount" value="${sp.amount}" onkeyup="calculateFinancials()" onchange="calculateFinancials()" style="margin-bottom:0; flex:1;">
           <button class="btn btn-secondary btn-small" onclick="this.parentElement.remove(); calculateFinancials();" style="padding:0 10px;">✕</button>
         `;
@@ -1203,7 +1256,7 @@
       const div = document.createElement('div');
       div.className = 'fin-row';
       div.innerHTML = `
-        <input type="text" placeholder="Nombre auspiciante / sponsor" class="sp-name" style="margin-bottom:0; flex:2;">
+        <input type="text" placeholder="Nombre auspiciante" class="sp-name" style="margin-bottom:0; flex:2;">
         <input type="number" placeholder="Monto ($)" class="sp-amount" value="0" onkeyup="calculateFinancials()" onchange="calculateFinancials()" style="margin-bottom:0; flex:1;">
         <button class="btn btn-secondary btn-small" onclick="this.parentElement.remove(); calculateFinancials();" style="padding:0 10px;">✕</button>
       `;
@@ -1216,11 +1269,11 @@
       const container = document.getElementById('fin-expenses-container');
       container.innerHTML = '';
 
-      show.financials.expenses.forEach((ex, idx) => {
+      show.financials.expenses.forEach((ex) => {
         const div = document.createElement('div');
         div.className = 'fin-row';
         div.innerHTML = `
-          <input type="text" placeholder="Concepto de gasto (Ej: Sonido)" class="ex-name" value="${ex.name}" style="margin-bottom:0; flex:2;">
+          <input type="text" placeholder="Concepto de gasto" class="ex-name" value="${ex.name}" style="margin-bottom:0; flex:2;">
           <input type="number" placeholder="Monto ($)" class="ex-amount" value="${ex.amount}" onkeyup="calculateFinancials()" onchange="calculateFinancials()" style="margin-bottom:0; flex:1;">
           <button class="btn btn-secondary btn-small" onclick="this.parentElement.remove(); calculateFinancials();" style="padding:0 10px;">✕</button>
         `;
@@ -1233,7 +1286,7 @@
       const div = document.createElement('div');
       div.className = 'fin-row';
       div.innerHTML = `
-        <input type="text" placeholder="Concepto de gasto (Ej: Sonido)" class="ex-name" style="margin-bottom:0; flex:2;">
+        <input type="text" placeholder="Concepto de gasto" class="ex-name" style="margin-bottom:0; flex:2;">
         <input type="number" placeholder="Monto ($)" class="ex-amount" value="0" onkeyup="calculateFinancials()" onchange="calculateFinancials()" style="margin-bottom:0; flex:1;">
         <button class="btn btn-secondary btn-small" onclick="this.parentElement.remove(); calculateFinancials();" style="padding:0 10px;">✕</button>
       `;
@@ -1245,7 +1298,6 @@
       const show = appData.shows.find(s => s.id === selectedShowId);
       if (!show) return;
 
-      // 1. Calcular entradas pagadas
       const paidItems = show.doorList.filter(i => i.paid);
       const ticketRevenue = paidItems.reduce((sum, item) => sum + item.total, 0);
       const ticketCount = paidItems.reduce((sum, item) => sum + (item.ticketCount || 1), 0);
@@ -1253,14 +1305,12 @@
       document.getElementById('fin-tickets-revenue').innerText = `$${ticketRevenue.toLocaleString('es-AR')}`;
       document.getElementById('fin-tickets-count').innerText = `(${ticketCount} tickets pagados)`;
 
-      // 2. Calcular sponsors
       let sponsorTotal = 0;
       document.querySelectorAll('#fin-sponsors-container .fin-row').forEach(row => {
         const amt = parseFloat(row.querySelector('.sp-amount').value) || 0;
         sponsorTotal += amt;
       });
 
-      // 3. Calcular egresos
       let expenseTotal = 0;
       document.querySelectorAll('#fin-expenses-container .fin-row').forEach(row => {
         const amt = parseFloat(row.querySelector('.ex-amount').value) || 0;
@@ -1360,7 +1410,7 @@
           <table>
             <thead><tr><th>Concepto</th><th>Monto</th></tr></thead>
             <tbody>
-              <tr><td>Venta de Entradas Validada (${ticketCount} tickets)</td><td>$${ticketRevenue.toLocaleString('es-AR')}</td></tr>
+              <tr><td>Venta de Entradas Validada (${ticketCount} accesos)</td><td>$${ticketRevenue.toLocaleString('es-AR')}</td></tr>
               ${show.financials.sponsors.map(s => `<tr><td>Sponsorship: ${s.name}</td><td>$${s.amount.toLocaleString('es-AR')}</td></tr>`).join('')}
               <tr style="background:#eee; font-weight:bold;"><td>TOTAL INGRESOS</td><td>$${totalIncome.toLocaleString('es-AR')}</td></tr>
             </tbody>
@@ -1394,7 +1444,7 @@
       printWindow.document.close();
     }
 
-    // --- VISTA PÚBLICA (COMPRADOR) ---
+    // --- VISTA COMPRADOR ---
     function populatePublicShowSelector() {
       const selector = document.getElementById('public-show-selector');
       selector.innerHTML = '';
@@ -1444,18 +1494,20 @@
         btnConfirm.style.opacity = "0.5";
       }
 
-      // Renderizar tipos de entradas
       const container = document.getElementById('pub-tickets-container');
       container.innerHTML = '';
 
       show.ticketTypes.forEach(t => {
         publicQuantities[t.id] = 0;
+        const mult = t.multiplier || 1;
 
         const row = document.createElement('div');
         row.className = 'ticket-row';
         row.innerHTML = `
           <div>
-            <div style="font-weight: bold;">${t.name}</div>
+            <div style="font-weight: bold;">
+              ${t.name} ${mult > 1 ? `<span style="font-size:0.75rem; color:var(--warning); font-weight:normal;">(${mult} entradas/accesos)</span>` : ''}
+            </div>
             <small style="color: var(--text-muted);">$${t.price.toLocaleString('es-AR')}</small>
           </div>
           <div class="qty-controls">
@@ -1533,9 +1585,11 @@
       show.ticketTypes.forEach(t => {
         const qty = publicQuantities[t.id] || 0;
         if (qty > 0) {
-          details.push(`${qty}x ${t.name}`);
+          const mult = t.multiplier || 1;
+          const accesses = qty * mult;
+          details.push(`${qty}x ${t.name}${mult > 1 ? ` (${accesses} accesos)` : ''}`);
           totalSum += qty * t.price;
-          totalTickets += qty;
+          totalTickets += accesses;
         }
       });
 
@@ -1544,8 +1598,7 @@
         return;
       }
 
-      // Agregar registro al show (Ingresa como PENDIENTE de pago)
-      show.doorList.push({
+      const booking = {
         id: "d_" + Date.now(),
         name: name,
         detail: details.join(", "),
@@ -1553,22 +1606,22 @@
         ticketsEntered: 0,
         total: totalSum,
         paid: false
-      });
+      };
 
+      show.doorList.push(booking);
       saveDataToStorage();
-      showToast(`¡Gracias ${name}! Quedaste anotado en la lista de puerta.`);
 
-      // Resetear campos públicos
+      showToast(`¡Gracias ${name}! Quedaste anotado/a en la lista de puerta.`);
+
       document.getElementById('pub-buyer-name').value = '';
       loadPublicShow(selectedShowId);
 
-      // Si estamos en entorno maestro, actualizar tabla
       if (currentViewMode === 'master') {
         renderDoorTable();
       }
     }
 
-    // --- MODAL CREACIÓN / EDICIÓN DE SHOWS (ADMINISTRADOR) ---
+    // --- MODAL SHOW (CREAR / EDITAR) ---
     function openNewShowModal() {
       editingShowId = null;
       document.getElementById('modal-title').innerText = "Crear Nuevo Show";
@@ -1583,7 +1636,7 @@
 
       const container = document.getElementById('form-tickets-list');
       container.innerHTML = '';
-      addTicketTypeForm("General", 10000);
+      addTicketTypeForm("General", 10000, 1);
 
       document.getElementById('modal-show').classList.remove('hidden');
     }
@@ -1610,7 +1663,7 @@
       const container = document.getElementById('form-tickets-list');
       container.innerHTML = '';
       show.ticketTypes.forEach(t => {
-        addTicketTypeForm(t.name, t.price);
+        addTicketTypeForm(t.name, t.price, t.multiplier || 1);
       });
 
       document.getElementById('modal-show').classList.remove('hidden');
@@ -1620,16 +1673,21 @@
       document.getElementById('modal-show').classList.add('hidden');
     }
 
-    function addTicketTypeForm(name = "", price = "") {
+    function addTicketTypeForm(name = "", price = "", multiplier = 1) {
       const container = document.getElementById('form-tickets-list');
       const div = document.createElement('div');
       div.className = 'form-ticket-row';
       div.style.display = 'flex';
-      div.style.gap = '10px';
+      div.style.gap = '8px';
       div.style.marginBottom = '10px';
+      div.style.flexWrap = 'wrap';
       div.innerHTML = `
-        <input type="text" placeholder="Nombre tipo (Ej: Anticipada)" class="t-name" value="${name}" style="margin-bottom:0; flex:2;">
-        <input type="number" placeholder="Precio ($)" class="t-price" value="${price}" style="margin-bottom:0; flex:1;">
+        <input type="text" placeholder="Ej: Promo 2x1" class="t-name" value="${name}" style="margin-bottom:0; flex:2; min-width:130px;">
+        <input type="number" placeholder="Precio ($)" class="t-price" value="${price}" style="margin-bottom:0; flex:1; min-width:80px;">
+        <div style="flex:1; min-width:110px; display:flex; align-items:center; gap:4px;" title="Entradas/personas que incluye cada compra">
+          <span style="font-size:0.75rem; color:var(--text-muted);">Accesos:</span>
+          <input type="number" placeholder="Personas" class="t-mult" value="${multiplier}" min="1" style="margin-bottom:0; width:100%;">
+        </div>
         <button class="btn btn-secondary btn-small" onclick="this.parentElement.remove()" style="padding:0 10px;">✕</button>
       `;
       container.appendChild(div);
@@ -1649,8 +1707,9 @@
       ticketRows.forEach((row, idx) => {
         const name = row.querySelector('.t-name').value.trim();
         const price = parseFloat(row.querySelector('.t-price').value) || 0;
+        const mult = parseInt(row.querySelector('.t-mult').value) || 1;
         if (name) {
-          ticketTypes.push({ id: "t_" + (idx + 1), name: name, price: price });
+          ticketTypes.push({ id: "t_" + (idx + 1), name: name, price: price, multiplier: mult });
         }
       });
 
