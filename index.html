@@ -18,18 +18,18 @@
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
-    body { background: var(--bg); color: var(--text); padding: 15px; display: flex; flex-direction: column; align-items: center; min-height: 100vh; }
+    body { background: var(--bg); color: var(--text); padding: 15px; display: flex; flex-direction: column; align-items: center; min-height: 100vh; width: 100%; }
     
     /* Top Header / Mode Switcher */
-    .top-bar { width: 100%; max-width: 740px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; background: var(--card-bg); padding: 10px 15px; border-radius: 10px; border: 1px solid var(--border); }
+    .top-bar { width: 100%; max-width: 740px; display: flex; justify-content: space-between; align-items: center; margin: 0 auto 20px auto; background: var(--card-bg); padding: 10px 15px; border-radius: 10px; border: 1px solid var(--border); }
     
     /* Filter Tabs */
     .filter-tabs { display: flex; gap: 8px; margin-bottom: 15px; width: 100%; }
     .filter-btn { padding: 8px 14px; background: #16161a; border: 1px solid var(--border); color: var(--text-muted); border-radius: 6px; cursor: pointer; font-size: 0.85rem; font-weight: 600; }
     .filter-btn.active { background: var(--accent); color: white; border-color: var(--accent); }
 
-    .view-container { width: 100%; max-width: 740px; }
-    .card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-bottom: 20px; position: relative; }
+    .view-container { width: 100%; max-width: 740px; margin: 0 auto; display: flex; flex-direction: column; align-items: center; }
+    .card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-bottom: 20px; position: relative; width: 100%; }
     
     h1, h2, h3 { margin-bottom: 12px; font-weight: 700; }
     .status-badge { display: inline-block; padding: 4px 10px; border-radius: 20px; font-size: 0.78rem; font-weight: bold; }
@@ -42,7 +42,7 @@
     input:focus, select:focus { border-color: var(--accent); outline: none; }
 
     /* Show Cards */
-    .show-card { background: #18181c; border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin-bottom: 14px; display: flex; flex-direction: column; gap: 10px; }
+    .show-card { background: #18181c; border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin-bottom: 14px; display: flex; flex-direction: column; gap: 10px; width: 100%; }
     .show-card-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
     .show-card-title { font-size: 1.15rem; font-weight: bold; color: white; }
     .show-card-stats { display: flex; flex-direction: column; gap: 6px; font-size: 0.88rem; color: var(--text-muted); margin-top: 4px; }
@@ -85,7 +85,7 @@
     .check-cell input { width: 22px; height: 22px; margin: 0; cursor: pointer; accent-color: var(--success); }
 
     /* Door Person Search Cards */
-    .door-search-card { background: #16161a; border: 1px solid var(--border); border-radius: 10px; padding: 14px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .door-search-card { background: #16161a; border: 1px solid var(--border); border-radius: 10px; padding: 14px; margin-bottom: 12px; display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; width: 100%; }
     .door-search-card.all-entered { border-left: 5px solid var(--success); }
     .door-search-card.partial-entered { border-left: 5px solid var(--warning); }
     .door-search-card.none-entered { border-left: 5px solid var(--border); }
@@ -122,7 +122,7 @@
   <div id="toast" class="toast">Mensaje del sistema</div>
 
   <!-- Barra de Control de Entorno -->
-  <div class="top-bar">
+  <div class="top-bar" id="app-top-bar">
     <div style="font-size: 0.85rem; color: var(--text-muted);">
       Entorno actual: <strong style="color: white;" id="mode-label">Panel Maestro (Administrador)</strong>
     </div>
@@ -133,7 +133,7 @@
   <div id="view-master" class="view-container">
     
     <!-- Dashboard Principal de Shows -->
-    <div id="master-dashboard">
+    <div id="master-dashboard" style="width: 100%;">
       <div class="card">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
           <h2>Gestión de Shows</h2>
@@ -147,15 +147,15 @@
           <button class="filter-btn" id="filter-all" onclick="setDashboardFilter('all')">Todos (<span id="count-all">0</span>)</button>
         </div>
 
-        <div id="shows-list-container">
+        <div id="shows-list-container" style="width: 100%;">
           <!-- Tarjetas de shows generadas dinámicamente -->
         </div>
       </div>
     </div>
 
     <!-- Detalle del Show Seleccionado y Gestión de Puerta -->
-    <div id="master-show-detail" class="hidden">
-      <button class="btn btn-secondary btn-small" style="margin-bottom: 15px;" onclick="backToDashboard()">← Volver al Listado de Shows</button>
+    <div id="master-show-detail" class="view-container hidden">
+      <button class="btn btn-secondary btn-small" style="margin-bottom: 15px; align-self: flex-start;" onclick="backToDashboard()">← Volver al Listado de Shows</button>
       
       <div class="card">
         <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px;">
@@ -181,11 +181,15 @@
           </div>
         </div>
 
-        <div style="background: #16161a; border: 1px solid var(--border); padding: 10px; border-radius: 8px; margin-top: 10px; display: flex; justify-content: space-between; align-items: center; gap: 10px;">
-          <div style="font-size: 0.82rem; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-            Link del comprador: <span id="detail-public-url" style="color: var(--warning); font-family: monospace; font-weight: bold;"></span>
+        <div style="background: #16161a; border: 1px solid var(--border); padding: 12px; border-radius: 8px; margin-top: 10px; display: flex; flex-direction: column; gap: 10px;">
+          <div style="font-size: 0.82rem; color: var(--text-muted);">
+            Link público del comprador: <br>
+            <span id="detail-public-url" style="color: var(--warning); font-family: monospace; font-weight: bold; word-break: break-all;"></span>
           </div>
-          <button class="btn btn-small btn-secondary" onclick="copyShowLink()">Copiar Link</button>
+          <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+            <button class="btn btn-small btn-secondary" onclick="copyBuyerLink(selectedShowId)">📲 Copiar Link para Compradores</button>
+            <button class="btn btn-small btn-secondary" onclick="copyDoorLink(selectedShowId)">🚪 Copiar Link para Puerta</button>
+          </div>
         </div>
       </div>
 
@@ -222,8 +226,8 @@
   <!-- PANTALLA 2: VISTA PÚBLICA DEL COMPRADOR (FORMULARIO WEB) -->
   <div id="view-public" class="view-container hidden">
     
-    <!-- Barra superior para simular la apertura de diferentes links -->
-    <div style="background: rgba(255,255,255,0.05); padding: 8px 12px; border-radius: 8px; margin-bottom: 15px; display: flex; align-items: center; gap: 10px; border: 1px solid var(--border);">
+    <!-- Selector de vista simulada -->
+    <div id="public-selector-bar" style="background: rgba(255,255,255,0.05); padding: 8px 12px; border-radius: 8px; margin-bottom: 15px; display: flex; align-items: center; gap: 10px; border: 1px solid var(--border); width: 100%;">
       <span style="font-size: 0.75rem; color: var(--text-muted);">Probando vista del link:</span>
       <select id="public-show-selector" onchange="loadPublicShow(this.value)" style="margin-bottom: 0; padding: 4px; font-size: 0.85rem;">
         <!-- Opciones de shows generadas dinámicamente -->
@@ -280,7 +284,7 @@
 
   <!-- PANTALLA 3: VISTA BUSCADOR DE PUERTA (DESGLOSADO Y SIN ACENTOS) -->
   <div id="view-door-search" class="view-container hidden">
-    <button class="btn btn-secondary btn-small" style="margin-bottom: 15px;" onclick="closeDoorSearchMode()">← Volver al Panel Admin</button>
+    <button class="btn btn-secondary btn-small" style="margin-bottom: 15px; align-self: flex-start;" onclick="closeDoorSearchMode()">← Volver al Panel Admin</button>
     
     <div class="card">
       <div style="border-bottom: 1px solid var(--border); padding-bottom: 12px; margin-bottom: 15px;">
@@ -297,7 +301,7 @@
       </div>
 
       <!-- Tarjetas de búsqueda rápida -->
-      <div id="door-search-cards-container">
+      <div id="door-search-cards-container" style="width: 100%;">
         <!-- Tarjetas dinámicas -->
       </div>
     </div>
@@ -439,13 +443,16 @@
       return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
     }
 
-    function getShowSlug(title) {
-      if (!title) return 'concierto';
-      return removeAccents(title).replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+    function getBaseUrl() {
+      return window.location.href.split('?')[0].split('#')[0];
     }
 
-    function getShowPublicUrl(show) {
-      return `https://simondice.app/entradas/${getShowSlug(show.title)}`;
+    function getBuyerUrl(showId) {
+      return `${getBaseUrl()}?show=${showId}`;
+    }
+
+    function getDoorUrl(showId) {
+      return `${getBaseUrl()}?door=${showId}`;
     }
 
     function isShowPast(dateString) {
@@ -540,12 +547,82 @@
 
     // --- INICIALIZACIÓN ---
     window.onload = function() {
-      renderDashboard();
-      populatePublicShowSelector();
-      if (appData.shows.length > 0) {
-        loadPublicShow(appData.shows[0].id);
+      const routed = checkURLParams();
+      if (!routed) {
+        renderDashboard();
+        populatePublicShowSelector();
+        if (appData.shows.length > 0) {
+          loadPublicShow(appData.shows[0].id);
+        }
       }
     };
+
+    // --- RUTEO AUTOMÁTICO DE URLS (?show=ID ó ?door=ID) ---
+    function checkURLParams() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const showParam = urlParams.get('show');
+      const doorParam = urlParams.get('door');
+
+      if (showParam) {
+        const show = appData.shows.find(s => s.id == showParam);
+        if (show) {
+          selectedShowId = show.id;
+          currentViewMode = 'public';
+          document.getElementById('view-master').classList.add('hidden');
+          document.getElementById('view-door-search').classList.add('hidden');
+          document.getElementById('view-public').classList.remove('hidden');
+          document.getElementById('mode-label').innerText = "Vista Comprador";
+          loadPublicShow(show.id);
+          return true;
+        }
+      } else if (doorParam) {
+        const show = appData.shows.find(s => s.id == doorParam);
+        if (show) {
+          selectedShowId = show.id;
+          openDoorSearchMode();
+          return true;
+        }
+      }
+      return false;
+    }
+
+    // --- FUNCIONES PARA COPIAR LINKS REALES AL PORTAPAPELES ---
+    function copyTextToClipboard(text, successMsg) {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(() => {
+          showToast(successMsg);
+        }).catch(() => {
+          fallbackCopyText(text, successMsg);
+        });
+      } else {
+        fallbackCopyText(text, successMsg);
+      }
+    }
+
+    function fallbackCopyText(text, successMsg) {
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      textarea.style.position = 'fixed';
+      document.body.appendChild(textarea);
+      textarea.select();
+      try {
+        document.execCommand('copy');
+        showToast(successMsg);
+      } catch (err) {
+        showToast("No se pudo copiar el enlace");
+      }
+      document.body.removeChild(textarea);
+    }
+
+    function copyBuyerLink(showId) {
+      const link = getBuyerUrl(showId);
+      copyTextToClipboard(link, "📲 Link para comprador copiado al portapapeles");
+    }
+
+    function copyDoorLink(showId) {
+      const link = getDoorUrl(showId);
+      copyTextToClipboard(link, "🚪 Link de puerta copiado al portapapeles");
+    }
 
     // --- NAVEGACIÓN Y CAMBIO DE VISTAS ---
     function toggleViewMode() {
@@ -602,7 +679,7 @@
         const capacity = show.capacity || 100;
         const percentage = Math.min(100, Math.round((totalTicketsSold / capacity) * 100));
         
-        const publicUrl = getShowPublicUrl(show);
+        const buyerUrl = getBuyerUrl(show.id);
         const past = isShowPast(show.dateVal);
 
         const card = document.createElement('div');
@@ -617,8 +694,8 @@
                 ${past ? '<span class="status-badge status-past">⚠️ Fecha transcurrida (Pasado)</span>' : ''}
               </div>
               <div class="show-card-title">${show.title}</div>
-              <div style="font-size: 0.82rem; color: var(--warning); font-family: monospace; margin-top: 3px;">
-                🔗 ${publicUrl}
+              <div style="font-size: 0.82rem; color: var(--warning); font-family: monospace; margin-top: 3px; word-break: break-all;">
+                🔗 ${buyerUrl}
               </div>
               <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 3px;">
                 📅 ${formatDateDisplay(show.dateVal)} | 📍 ${show.place}
@@ -635,7 +712,9 @@
             </div>
           </div>
           <div class="show-card-actions">
-            <button class="btn btn-small" onclick="openShowDetail(${show.id})">Gestionar Puerta</button>
+            <button class="btn btn-small" onclick="openShowDetail(${show.id})">👥 Gestionar Puerta</button>
+            <button class="btn btn-small btn-secondary" onclick="copyBuyerLink(${show.id})">📲 Copiar Link Venta</button>
+            <button class="btn btn-small btn-secondary" onclick="copyDoorLink(${show.id})">🚪 Copiar Link Puerta</button>
             <button class="btn btn-small btn-secondary" onclick="previewShowDirect(${show.id})">👁️ Vista Previa</button>
             <button class="btn btn-small btn-outline" onclick="toggleShowStatus(${show.id})">
               ${show.status === 'active' ? 'Archivar' : 'Activar'}
@@ -685,7 +764,7 @@
         pastBadge.classList.add('hidden');
       }
 
-      document.getElementById('detail-public-url').innerText = getShowPublicUrl(show);
+      document.getElementById('detail-public-url').innerText = getBuyerUrl(show.id);
 
       renderDoorTable();
     }
@@ -730,13 +809,6 @@
           row.style.display = name.includes(query) ? '' : 'none';
         }
       }
-    }
-
-    function copyShowLink() {
-      const url = document.getElementById('detail-public-url').innerText;
-      navigator.clipboard.writeText(url).then(() => {
-        showToast("Link copiado al portapapeles");
-      });
     }
 
     function previewShowDirect(id) {
@@ -1170,7 +1242,7 @@
       appData.shows.forEach(s => {
         const opt = document.createElement('option');
         opt.value = s.id;
-        opt.innerText = `${s.title} (${getShowPublicUrl(s)})`;
+        opt.innerText = `${s.title} (${getBuyerUrl(s.id)})`;
         selector.appendChild(opt);
       });
       if (appData.shows.length > 0) {
@@ -1263,9 +1335,7 @@
 
     function copyAliasPublic() {
       const alias = document.getElementById('pub-alias-display').innerText;
-      navigator.clipboard.writeText(alias).then(() => {
-        showToast("Alias copiado al portapapeles");
-      });
+      copyTextToClipboard(alias, "Alias copiado al portapapeles");
     }
 
     function submitBooking() {
