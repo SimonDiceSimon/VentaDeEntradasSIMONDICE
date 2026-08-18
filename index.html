@@ -113,6 +113,8 @@
     /* Toast Notification */
     .toast { position: fixed; bottom: 20px; right: 20px; background: #2ecc71; color: white; padding: 12px 20px; border-radius: 8px; font-weight: bold; box-shadow: 0 4px 12px rgba(0,0,0,0.5); z-index: 200; display: none; }
 
+    .cloud-badge { display: flex; align-items: center; gap: 6px; font-size: 0.8rem; color: var(--success); }
+
     .hidden { display: none !important; }
   </style>
 </head>
@@ -124,9 +126,13 @@
   <!-- Barra de Control de Entorno -->
   <div class="top-bar" id="app-top-bar">
     <div style="font-size: 0.85rem; color: var(--text-muted);">
-      Entorno actual: <strong style="color: white;" id="mode-label">Panel Maestro (Administrador)</strong>
+      Entorno: <strong style="color: white;" id="mode-label">Panel Maestro (Administrador)</strong>
+      <div class="cloud-badge" id="cloud-status">☁️ Conectando a la Nube...</div>
     </div>
-    <button class="btn btn-secondary btn-small" onclick="toggleViewMode()">Cambiar Vista</button>
+    <div style="display: flex; gap: 8px;">
+      <button class="btn btn-secondary btn-small" id="btn-config-firebase" onclick="openFirebaseConfigModal()">⚙️ Config Firebase</button>
+      <button class="btn btn-secondary btn-small" onclick="toggleViewMode()">Cambiar Vista</button>
+    </div>
   </div>
 
   <!-- PANTALLA 1: PANEL MAESTRO (ADMINISTRADOR) -->
@@ -173,7 +179,7 @@
             </p>
           </div>
           <div style="display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end;">
-            <button class="btn btn-secondary btn-small" onclick="refreshShowDetail()">🔄 Actualizar Datos</button>
+            <button class="btn btn-secondary btn-small" onclick="refreshShowDetail()">🔄 Sincronizar Datos</button>
             <button class="btn btn-secondary btn-small" onclick="openDoorSearchMode()">📱 Buscador para Puerta</button>
             <button class="btn btn-secondary btn-small" onclick="openGuestModal()">➕ Invitados / Prensa</button>
             <button class="btn btn-secondary btn-small" onclick="openFinancialModal()">📊 Balance y Liquidación</button>
@@ -289,7 +295,7 @@
     </div>
   </div>
 
-  <!-- PANTALLA 3: VISTA BUSCADOR DE PUERTA (DESGLOSADO Y SIN ACENTOS) -->
+  <!-- PANTALLA 3: VISTA BUSCADOR DE PUERTA -->
   <div id="view-door-search" class="view-container hidden">
     <div style="display: flex; justify-content: space-between; width: 100%; align-items: center; margin-bottom: 15px;">
       <button id="door-back-admin-btn" class="btn btn-secondary btn-small" onclick="closeDoorSearchMode()">← Volver al Panel Admin</button>
@@ -317,7 +323,40 @@
     </div>
   </div>
 
-  <!-- MODAL 1: CREAR / EDITAR SHOW (ADMINISTRADOR) -->
+  <!-- MODAL 1: CONFIGURAR FIREBASE CONFIG (CLAVE) -->
+  <div id="modal-firebase" class="modal-overlay hidden">
+    <div class="modal">
+      <h2>⚙️ Configurar Conexión a Firebase</h2>
+      <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 15px;">
+        Tus credenciales de Firebase han sido guardadas.
+      </p>
+
+      <label>apiKey</label>
+      <input type="text" id="cfg-apiKey" placeholder="AIzaSy...">
+
+      <label>authDomain</label>
+      <input type="text" id="cfg-authDomain" placeholder="tu-proyecto.firebaseapp.com">
+
+      <label>projectId</label>
+      <input type="text" id="cfg-projectId" placeholder="tu-proyecto">
+
+      <label>storageBucket</label>
+      <input type="text" id="cfg-storageBucket" placeholder="tu-proyecto.appspot.com">
+
+      <label>messagingSenderId</label>
+      <input type="text" id="cfg-messagingSenderId" placeholder="1234567890">
+
+      <label>appId</label>
+      <input type="text" id="cfg-appId" placeholder="1:1234567890:web:abc123">
+
+      <div style="display: flex; gap: 10px; margin-top: 15px;">
+        <button class="btn btn-secondary" onclick="closeFirebaseConfigModal()">Cancelar</button>
+        <button class="btn" onclick="saveFirebaseConfigFromModal()">Guardar y Conectar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL 2: CREAR / EDITAR SHOW (ADMINISTRADOR) -->
   <div id="modal-show" class="modal-overlay hidden">
     <div class="modal">
       <h2 id="modal-title">Configurar Show</h2>
@@ -377,7 +416,7 @@
     </div>
   </div>
 
-  <!-- MODAL 2: BALANCE FINANCIERO Y LIQUIDACIÓN -->
+  <!-- MODAL 3: BALANCE FINANCIERO Y LIQUIDACIÓN -->
   <div id="modal-financial" class="modal-overlay hidden">
     <div class="modal" style="max-width: 650px;">
       <h2>📊 Balance y Rendición de Cuentas</h2>
@@ -446,7 +485,7 @@
     </div>
   </div>
 
-  <!-- MODAL 3: AGREGAR INVITADOS / PRENSA (ADMINISTRADOR) -->
+  <!-- MODAL 4: AGREGAR INVITADOS / PRENSA -->
   <div id="modal-guest" class="modal-overlay hidden">
     <div class="modal">
       <h2>➕ Agregar Invitado / Prensa</h2>
@@ -475,109 +514,67 @@
     </div>
   </div>
 
-  <script>
-    // --- HELPER DE CODIFICACIÓN UTF-8 ROBUSTO PARA URLS DE COMPARTIDO ---
-    function encodeShowData(show) {
-      try {
-        const payload = {
-          id: show.id,
-          title: show.title,
-          dateVal: show.dateVal,
-          place: show.place,
-          timeDoors: show.timeDoors,
-          timeShow: show.timeShow,
-          alias: show.alias,
-          capacity: show.capacity,
-          status: show.status,
-          ticketTypes: show.ticketTypes
-        };
-        const jsonStr = JSON.stringify(payload);
-        const bytes = new TextEncoder().encode(jsonStr);
-        let binary = '';
-        for (let i = 0; i < bytes.byteLength; i++) {
-          binary += String.fromCharCode(bytes[i]);
-        }
-        return encodeURIComponent(btoa(binary));
-      } catch(e) {
-        return '';
+  <!-- MÓDULO FIREBASE SDK V11 -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+    import { 
+      getAuth, 
+      signInWithCustomToken, 
+      signInAnonymously, 
+      onAuthStateChanged 
+    } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+    import { 
+      getFirestore, 
+      collection, 
+      doc, 
+      setDoc, 
+      onSnapshot 
+    } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+    // --- CONFIGURACIÓN DE FIREBASE OFICIAL DE TU PROYECTO ---
+    const defaultFirebaseConfig = {
+      apiKey: "AIzaSyDB2HBANXKk39V7njxfvEj0ElwjesmYJO0",
+      authDomain: "ventaentradas-2b0b6.firebaseapp.com",
+      projectId: "ventaentradas-2b0b6",
+      storageBucket: "ventaentradas-2b0b6.firebasestorage.app",
+      messagingSenderId: "395120239980",
+      appId: "1:395120239980:web:37a2b33c8c334db3a77f49"
+    };
+
+    function getFirebaseConfig() {
+      if (typeof __firebase_config !== 'undefined' && __firebase_config) {
+        try { return JSON.parse(__firebase_config); } catch(e){}
       }
-    }
-
-    function decodeShowData(encodedStr) {
-      try {
-        if (!encodedStr) return null;
-        const binary = atob(decodeURIComponent(encodedStr));
-        const bytes = new Uint8Array(binary.length);
-        for (let i = 0; i < binary.length; i++) {
-          bytes[i] = binary.charCodeAt(i);
-        }
-        const jsonStr = new TextDecoder().decode(bytes);
-        return JSON.parse(jsonStr);
-      } catch(e) {
-        return null;
+      const saved = localStorage.getItem('simon_dice_firebase_cfg');
+      if (saved) {
+        try { return JSON.parse(saved); } catch(e){}
       }
+      return defaultFirebaseConfig;
     }
 
-    function removeAccents(str) {
-      if (!str) return '';
-      return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+    const firebaseConfig = getFirebaseConfig();
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+
+    let db = null;
+    let auth = null;
+    let currentUser = null;
+
+    try {
+      const app = initializeApp(firebaseConfig);
+      auth = getAuth(app);
+      db = getFirestore(app);
+    } catch (e) {
+      console.warn("Error al inicializar Firebase con la configuración enviada", e);
     }
 
-    function getShowSlug(title) {
-      if (!title) return 'evento';
-      return removeAccents(title).replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
-    }
+    // --- VARIABLES DE APLICACIÓN ---
+    window.currentViewMode = 'master'; 
+    window.currentFilter = 'active'; 
+    window.selectedShowId = 1;
+    window.editingShowId = null;
+    window.publicQuantities = {};
 
-    function getBaseUrl() {
-      return window.location.href.split('?')[0].split('#')[0];
-    }
-
-    function getBuyerUrl(show) {
-      const s = typeof show === 'object' ? show : appData.shows.find(item => item.id == show);
-      if (!s) return getBaseUrl();
-      const slug = getShowSlug(s.title);
-      const data = encodeShowData(s);
-      return `${getBaseUrl()}?show=${s.id}&evento=${slug}&d=${data}`;
-    }
-
-    function getDoorUrl(show) {
-      const s = typeof show === 'object' ? show : appData.shows.find(item => item.id == show);
-      if (!s) return getBaseUrl();
-      const slug = getShowSlug(s.title);
-      const data = encodeShowData(s);
-      return `${getBaseUrl()}?door=${s.id}&evento=${slug}&d=${data}`;
-    }
-
-    function isShowPast(dateString) {
-      if (!dateString) return false;
-      const showDate = new Date(dateString + 'T23:59:59');
-      const today = new Date();
-      return showDate < today;
-    }
-
-    function formatDateDisplay(dateString) {
-      if (!dateString) return "Fecha sin definir";
-      const parts = dateString.split('-');
-      if (parts.length === 3) {
-        return `${parts[2]}/${parts[1]}/${parts[0]}`;
-      }
-      return dateString;
-    }
-
-    function showToast(message) {
-      const toast = document.getElementById('toast');
-      toast.innerText = message;
-      toast.style.display = 'block';
-      setTimeout(() => { toast.style.display = 'none'; }, 3000);
-    }
-
-    // --- ESTRUCTURA DE DATOS Y MEMORIA ---
-    let currentViewMode = 'master'; // 'master', 'public', 'door-search'
-    let currentFilter = 'active'; // 'active', 'inactive', 'all'
-    let selectedShowId = 1;
-    let editingShowId = null;
-
-    let appData = {
+    window.appData = {
       shows: [
         {
           id: 1,
@@ -600,9 +597,7 @@
             { id: "d3", name: "Lucas 'El Vasco' Rodríguez", detail: "1x Promo 2x1 (2 accesos)", ticketCount: 2, ticketsEntered: 0, total: 14000, paid: false }
           ],
           financials: {
-            sponsors: [
-              { name: "Cervecería Artesanal", amount: 50000 }
-            ],
+            sponsors: [{ name: "Cervecería Artesanal", amount: 50000 }],
             expenses: [
               { name: "Alquiler de Sala y Sonido", amount: 80000 },
               { name: "SADAIC / AADI CAPIF", amount: 15000 },
@@ -614,66 +609,173 @@
       ]
     };
 
-    let publicQuantities = {};
-
-    function loadDataFromStorage() {
+    // --- AUTENTICACIÓN Y REALTIME SYNC ---
+    async function initCloudAuth() {
+      if (!auth) return;
       try {
-        const saved = localStorage.getItem('simon_dice_app_data');
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          if (parsed && Array.isArray(parsed.shows)) {
-            appData = parsed;
-          }
+        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+          await signInWithCustomToken(auth, __initial_auth_token);
+        } else {
+          await signInAnonymously(auth);
         }
-      } catch (e) {
-        console.warn("Storage no disponible", e);
+      } catch (err) {
+        console.warn("Autenticación anónima iniciada", err);
       }
     }
 
-    function saveDataToStorage() {
+    function setupCloudSync() {
+      if (!db || !auth) return;
+
+      onAuthStateChanged(auth, (user) => {
+        currentUser = user;
+        if (!user) return;
+
+        const cloudBadge = document.getElementById('cloud-status');
+        if (cloudBadge) cloudBadge.innerHTML = "🟢 Conectado a la Nube en Vivo";
+
+        // Colección de datos públicos en Firestore
+        const showsCol = collection(db, 'artifacts', appId, 'public', 'data', 'shows');
+
+        onSnapshot(showsCol, (snapshot) => {
+          if (!snapshot.empty) {
+            const fetchedShows = [];
+            snapshot.forEach((docSnap) => {
+              fetchedShows.push(docSnap.data());
+            });
+            if (fetchedShows.length > 0) {
+              window.appData.shows = fetchedShows;
+              saveDataToStorage();
+              renderAppUI();
+            }
+          }
+        }, (error) => {
+          console.error("Error en sincronización en vivo Firestore:", error);
+        });
+      });
+    }
+
+    window.saveShowToCloud = async function(show) {
+      saveDataToStorage();
+      if (!db || !currentUser) return;
       try {
-        localStorage.setItem('simon_dice_app_data', JSON.stringify(appData));
+        const showDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'shows', String(show.id));
+        await setDoc(showDocRef, show);
       } catch (e) {
-        console.warn("No se pudo guardar en storage", e);
+        console.error("Error al guardar show en Firestore:", e);
+      }
+    };
+
+    function renderAppUI() {
+      if (window.currentViewMode === 'master') {
+        renderDashboard();
+        if (document.getElementById('master-show-detail') && !document.getElementById('master-show-detail').classList.contains('hidden')) {
+          openShowDetail(window.selectedShowId);
+        }
+      } else if (window.currentViewMode === 'public') {
+        loadPublicShow(window.selectedShowId);
+      } else if (window.currentViewMode === 'door-search') {
+        renderDoorSearchCards();
       }
     }
 
-    // --- INICIALIZACIÓN ---
-    window.onload = function() {
+    // --- INICIALIZACIÓN GENERAL ---
+    window.onload = async function() {
       loadDataFromStorage();
+      await initCloudAuth();
+      setupCloudSync();
+
       const routed = checkURLParams();
       if (!routed) {
         renderDashboard();
         populatePublicShowSelector();
-        if (appData.shows.length > 0) {
-          loadPublicShow(appData.shows[0].id);
+        if (window.appData.shows.length > 0) {
+          loadPublicShow(window.appData.shows[0].id);
         }
       }
     };
 
-    // --- RUTEO AUTOMÁTICO DE URLS Y DECODIFICACIÓN ---
-    function checkURLParams() {
+    // --- MODAL DE CONFIGURACIÓN FIREBASE ---
+    window.openFirebaseConfigModal = function() {
+      const cfg = getFirebaseConfig();
+      document.getElementById('cfg-apiKey').value = cfg.apiKey || '';
+      document.getElementById('cfg-authDomain').value = cfg.authDomain || '';
+      document.getElementById('cfg-projectId').value = cfg.projectId || '';
+      document.getElementById('cfg-storageBucket').value = cfg.storageBucket || '';
+      document.getElementById('cfg-messagingSenderId').value = cfg.messagingSenderId || '';
+      document.getElementById('cfg-appId').value = cfg.appId || '';
+      document.getElementById('modal-firebase').classList.remove('hidden');
+    };
+
+    window.closeFirebaseConfigModal = function() {
+      document.getElementById('modal-firebase').classList.add('hidden');
+    };
+
+    window.saveFirebaseConfigFromModal = function() {
+      const newCfg = {
+        apiKey: document.getElementById('cfg-apiKey').value.trim(),
+        authDomain: document.getElementById('cfg-authDomain').value.trim(),
+        projectId: document.getElementById('cfg-projectId').value.trim(),
+        storageBucket: document.getElementById('cfg-storageBucket').value.trim(),
+        messagingSenderId: document.getElementById('cfg-messagingSenderId').value.trim(),
+        appId: document.getElementById('cfg-appId').value.trim()
+      };
+      localStorage.setItem('simon_dice_firebase_cfg', JSON.stringify(newCfg));
+      showToast("Configuración guardada. Recargando...");
+      setTimeout(() => location.reload(), 1000);
+    };
+
+    // --- AYUDANTES DE URLS CORTAS ---
+    function getBaseUrl() {
+      return window.location.href.split('?')[0].split('#')[0];
+    }
+
+    window.getBuyerUrl = function(show) {
+      const s = typeof show === 'object' ? show : window.appData.shows.find(item => item.id == show);
+      if (!s) return getBaseUrl();
+      return `${getBaseUrl()}?show=${s.id}`;
+    };
+
+    window.getDoorUrl = function(show) {
+      const s = typeof show === 'object' ? show : window.appData.shows.find(item => item.id == show);
+      if (!s) return getBaseUrl();
+      return `${getBaseUrl()}?door=${s.id}`;
+    };
+
+    window.removeAccents = function(str) {
+      if (!str) return '';
+      return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+    };
+
+    window.isShowPast = function(dateString) {
+      if (!dateString) return false;
+      const showDate = new Date(dateString + 'T23:59:59');
+      const today = new Date();
+      return showDate < today;
+    };
+
+    window.formatDateDisplay = function(dateString) {
+      if (!dateString) return "Fecha sin definir";
+      const parts = dateString.split('-');
+      if (parts.length === 3) return `${parts[2]}/${parts[1]}/${parts[0]}`;
+      return dateString;
+    };
+
+    window.showToast = function(message) {
+      const toast = document.getElementById('toast');
+      toast.innerText = message;
+      toast.style.display = 'block';
+      setTimeout(() => { toast.style.display = 'none'; }, 3000);
+    };
+
+    // --- RUTEO DE URLS CORTAS ---
+    window.checkURLParams = function() {
       const urlParams = new URLSearchParams(window.location.search);
       const showParam = urlParams.get('show');
       const doorParam = urlParams.get('door');
-      const dataParam = urlParams.get('d');
 
       if (showParam) {
-        let show = appData.shows.find(s => s.id == showParam);
-        
-        // Si no está en storage local del dispositivo, decodificar de la URL
-        if (!show && dataParam) {
-          const decoded = decodeShowData(dataParam);
-          if (decoded && decoded.id) {
-            decoded.doorList = decoded.doorList || [];
-            decoded.financials = decoded.financials || { sponsors: [], expenses: [], divideCount: 4 };
-            appData.shows.push(decoded);
-            saveDataToStorage();
-            show = decoded;
-          }
-        }
+        const show = window.appData.shows.find(s => s.id == showParam);
 
-        // Ocultar barra admin y selector para compradores
         document.getElementById('app-top-bar').classList.add('hidden');
         document.getElementById('public-selector-bar').classList.add('hidden');
         document.getElementById('view-master').classList.add('hidden');
@@ -681,34 +783,22 @@
         document.getElementById('view-public').classList.remove('hidden');
 
         if (show) {
-          selectedShowId = show.id;
-          currentViewMode = 'public';
+          window.selectedShowId = show.id;
+          window.currentViewMode = 'public';
           loadPublicShow(show.id);
         } else {
           document.getElementById('public-card').innerHTML = `
             <div style="text-align:center; padding: 30px 10px;">
-              <h2 style="color: var(--accent);">⚠️ Evento no encontrado</h2>
-              <p style="color: var(--text-muted); margin-top: 10px;">El enlace ingresado es incorrecto o no incluye la información del show.</p>
+              <h2 style="color: var(--accent);">⚠️ Buscando show en la nube...</h2>
+              <p style="color: var(--text-muted); margin-top: 10px;">Cargando la información del evento...</p>
             </div>
           `;
         }
         return true;
 
       } else if (doorParam) {
-        let show = appData.shows.find(s => s.id == doorParam);
+        const show = window.appData.shows.find(s => s.id == doorParam);
 
-        if (!show && dataParam) {
-          const decoded = decodeShowData(dataParam);
-          if (decoded && decoded.id) {
-            decoded.doorList = decoded.doorList || [];
-            decoded.financials = decoded.financials || { sponsors: [], expenses: [], divideCount: 4 };
-            appData.shows.push(decoded);
-            saveDataToStorage();
-            show = decoded;
-          }
-        }
-
-        // Ocultar barra admin y botón de regresar para personal de puerta
         document.getElementById('app-top-bar').classList.add('hidden');
         document.getElementById('door-back-admin-btn').classList.add('hidden');
         document.getElementById('view-master').classList.add('hidden');
@@ -716,33 +806,29 @@
         document.getElementById('view-door-search').classList.remove('hidden');
 
         if (show) {
-          selectedShowId = show.id;
+          window.selectedShowId = show.id;
           openDoorSearchMode();
         } else {
           document.getElementById('view-door-search').innerHTML = `
             <div class="card" style="text-align:center; padding: 30px 10px;">
-              <h2 style="color: var(--accent);">⚠️ Lista de Puerta no encontrada</h2>
-              <p style="color: var(--text-muted); margin-top: 10px;">El enlace ingresado es incorrecto o el show no está disponible.</p>
+              <h2 style="color: var(--accent);">⚠️ Cargando lista de puerta...</h2>
+              <p style="color: var(--text-muted); margin-top: 10px;">Conectando a la nube...</p>
             </div>
           `;
         }
         return true;
       }
       return false;
-    }
+    };
 
-    // --- COPIAR LINKS REALES CON DATA ---
-    function copyTextToClipboard(text, successMsg) {
+    // --- COPIAR LINKS Y TEXTOS ---
+    window.copyTextToClipboard = function(text, successMsg) {
       if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(text).then(() => {
-          showToast(successMsg);
-        }).catch(() => {
-          fallbackCopyText(text, successMsg);
-        });
+        navigator.clipboard.writeText(text).then(() => showToast(successMsg)).catch(() => fallbackCopyText(text, successMsg));
       } else {
         fallbackCopyText(text, successMsg);
       }
-    }
+    };
 
     function fallbackCopyText(text, successMsg) {
       const textarea = document.createElement('textarea');
@@ -759,60 +845,79 @@
       document.body.removeChild(textarea);
     }
 
-    function copyBuyerLink(showId) {
-      const link = getBuyerUrl(showId);
-      copyTextToClipboard(link, "📲 Link para comprador copiado al portapapeles");
-    }
+    window.copyBuyerLink = function(showId) {
+      const link = window.getBuyerUrl(showId);
+      window.copyTextToClipboard(link, "📲 Link corto para comprador copiado");
+    };
 
-    function copyDoorLink(showId) {
-      const link = getDoorUrl(showId);
-      copyTextToClipboard(link, "🚪 Link de puerta copiado al portapapeles");
-    }
+    window.copyDoorLink = function(showId) {
+      const link = window.getDoorUrl(showId);
+      window.copyTextToClipboard(link, "🚪 Link corto para puerta copiado");
+    };
 
-    // --- NAVEGACIÓN Y VISTAS ---
-    function toggleViewMode() {
+    // --- NAVEGACIÓN DE VISTAS ---
+    window.toggleViewMode = function() {
       document.getElementById('view-door-search').classList.add('hidden');
-      if (currentViewMode === 'master') {
-        currentViewMode = 'public';
+      if (window.currentViewMode === 'master') {
+        window.currentViewMode = 'public';
         document.getElementById('view-master').classList.add('hidden');
         document.getElementById('view-public').classList.remove('hidden');
         document.getElementById('mode-label').innerText = "Vista Comprador (Pública)";
       } else {
-        currentViewMode = 'master';
+        window.currentViewMode = 'master';
         document.getElementById('view-public').classList.add('hidden');
         document.getElementById('view-master').classList.remove('hidden');
         document.getElementById('mode-label').innerText = "Panel Maestro (Administrador)";
         renderDashboard();
       }
-    }
+    };
 
-    function setDashboardFilter(filter) {
-      currentFilter = filter;
+    window.setDashboardFilter = function(filter) {
+      window.currentFilter = filter;
       document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
       document.getElementById(`filter-${filter}`).classList.add('active');
       renderDashboard();
-    }
+    };
 
-    function backToDashboard() {
+    window.backToDashboard = function() {
       document.getElementById('master-show-detail').classList.add('hidden');
       document.getElementById('master-dashboard').classList.remove('hidden');
       renderDashboard();
+    };
+
+    // --- MEMORIA LOCAL FALLBACK ---
+    function loadDataFromStorage() {
+      try {
+        const saved = localStorage.getItem('simon_dice_app_data');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (parsed && Array.isArray(parsed.shows)) {
+            window.appData = parsed;
+          }
+        }
+      } catch (e) {}
     }
 
-    // --- PANEL MAESTRO ---
-    function renderDashboard() {
+    function saveDataToStorage() {
+      try {
+        localStorage.setItem('simon_dice_app_data', JSON.stringify(window.appData));
+      } catch (e) {}
+    }
+
+    // --- DASHBOARD PRINCIPAL ---
+    window.renderDashboard = function() {
       const container = document.getElementById('shows-list-container');
       container.innerHTML = '';
 
-      const countActive = appData.shows.filter(s => s.status === 'active').length;
-      const countInactive = appData.shows.filter(s => s.status === 'inactive').length;
+      const countActive = window.appData.shows.filter(s => s.status === 'active').length;
+      const countInactive = window.appData.shows.filter(s => s.status === 'inactive').length;
       document.getElementById('count-active').innerText = countActive;
       document.getElementById('count-inactive').innerText = countInactive;
-      document.getElementById('count-all').innerText = appData.shows.length;
+      document.getElementById('count-all').innerText = window.appData.shows.length;
 
-      let filtered = appData.shows;
-      if (currentFilter === 'active') filtered = appData.shows.filter(s => s.status === 'active');
-      if (currentFilter === 'inactive') filtered = appData.shows.filter(s => s.status === 'inactive');
+      let filtered = window.appData.shows;
+      if (window.currentFilter === 'active') filtered = window.appData.shows.filter(s => s.status === 'active');
+      if (window.currentFilter === 'inactive') filtered = window.appData.shows.filter(s => s.status === 'inactive');
 
       if (filtered.length === 0) {
         container.innerHTML = `<p style="color: var(--text-muted); font-size: 0.9rem; text-align: center; padding: 20px 0;">No hay shows en esta sección.</p>`;
@@ -820,16 +925,14 @@
       }
 
       filtered.forEach(show => {
-        // Ocupación Real: Sumar tickets con transferencia confirmada (paid === true)
         const paidTicketsSold = show.doorList
           .filter(i => i.paid)
           .reduce((sum, i) => sum + (i.ticketCount || 1), 0);
 
         const capacity = show.capacity || 100;
         const percentage = Math.min(100, Math.round((paidTicketsSold / capacity) * 100));
-        
-        const buyerUrl = getBuyerUrl(show);
-        const past = isShowPast(show.dateVal);
+        const buyerUrl = window.getBuyerUrl(show);
+        const past = window.isShowPast(show.dateVal);
 
         const card = document.createElement('div');
         card.className = 'show-card';
@@ -847,7 +950,7 @@
                 🔗 ${buyerUrl}
               </div>
               <div style="font-size: 0.85rem; color: var(--text-muted); margin-top: 3px;">
-                📅 ${formatDateDisplay(show.dateVal)} | 📍 ${show.place}
+                📅 ${window.formatDateDisplay(show.dateVal)} | 📍 ${show.place}
               </div>
             </div>
           </div>
@@ -875,21 +978,21 @@
       });
 
       populatePublicShowSelector();
-    }
+    };
 
-    function toggleShowStatus(id) {
-      const show = appData.shows.find(s => s.id === id);
+    window.toggleShowStatus = function(id) {
+      const show = window.appData.shows.find(s => s.id === id);
       if (show) {
         show.status = (show.status === 'active') ? 'inactive' : 'active';
-        saveDataToStorage();
-        showToast(`Show "${show.title}" cambiado a ${show.status === 'active' ? 'Activo' : 'Inactivo/Archivado'}`);
+        window.saveShowToCloud(show);
+        showToast(`Show "${show.title}" cambiado a ${show.status === 'active' ? 'Activo' : 'Inactivo'}`);
         renderDashboard();
       }
-    }
+    };
 
-    function openShowDetail(id) {
-      selectedShowId = id;
-      const show = appData.shows.find(s => s.id === id);
+    window.openShowDetail = function(id) {
+      window.selectedShowId = id;
+      const show = window.appData.shows.find(s => s.id === id);
       if (!show) return;
 
       document.getElementById('master-dashboard').classList.add('hidden');
@@ -903,7 +1006,7 @@
       const percentage = Math.min(100, Math.round((paidTicketsSold / capacity) * 100));
 
       document.getElementById('detail-title').innerText = show.title;
-      document.getElementById('detail-meta').innerText = `📅 ${formatDateDisplay(show.dateVal)} | 📍 ${show.place} | 🕒 Puertas: ${show.timeDoors} - Show: ${show.timeShow}`;
+      document.getElementById('detail-meta').innerText = `📅 ${window.formatDateDisplay(show.dateVal)} | 📍 ${show.place} | 🕒 Puertas: ${show.timeDoors} - Show: ${show.timeShow}`;
       document.getElementById('detail-capacity-text').innerText = `🪑 Ocupación real de sala (Pagados): ${paidTicketsSold} / ${capacity} tickets (${percentage}%)`;
 
       const badge = document.getElementById('detail-status-badge');
@@ -911,25 +1014,22 @@
       badge.innerText = show.status === 'active' ? '● Show Activo' : '● Inactivo / Archivado';
 
       const pastBadge = document.getElementById('detail-past-badge');
-      if (isShowPast(show.dateVal)) {
-        pastBadge.classList.remove('hidden');
-      } else {
-        pastBadge.classList.add('hidden');
-      }
+      if (window.isShowPast(show.dateVal)) pastBadge.classList.remove('hidden');
+      else pastBadge.classList.add('hidden');
 
-      document.getElementById('detail-public-url').innerText = getBuyerUrl(show);
+      document.getElementById('detail-public-url').innerText = window.getBuyerUrl(show);
 
       renderDoorTable();
-    }
+    };
 
-    function refreshShowDetail() {
+    window.refreshShowDetail = function() {
       loadDataFromStorage();
-      openShowDetail(selectedShowId);
+      openShowDetail(window.selectedShowId);
       showToast("🔄 Datos actualizados");
-    }
+    };
 
-    function renderDoorTable() {
-      const show = appData.shows.find(s => s.id === selectedShowId);
+    window.renderDoorTable = function() {
+      const show = window.appData.shows.find(s => s.id === window.selectedShowId);
       if (!show) return;
 
       const tbody = document.getElementById('door-table-body');
@@ -956,13 +1056,13 @@
         `;
         tbody.appendChild(tr);
       });
-    }
+    };
 
-    function togglePaid(showId, itemIndex, isChecked) {
-      const show = appData.shows.find(s => s.id === showId);
+    window.togglePaid = function(showId, itemIndex, isChecked) {
+      const show = window.appData.shows.find(s => s.id === showId);
       if (show && show.doorList[itemIndex]) {
         show.doorList[itemIndex].paid = isChecked;
-        saveDataToStorage();
+        window.saveShowToCloud(show);
 
         const paidTicketsSold = show.doorList.filter(i => i.paid).reduce((sum, i) => sum + (i.ticketCount || 1), 0);
         const capacity = show.capacity || 100;
@@ -971,44 +1071,44 @@
         document.getElementById('detail-capacity-text').innerText = `🪑 Ocupación real de sala (Pagados): ${paidTicketsSold} / ${capacity} tickets (${percentage}%)`;
         document.getElementById('door-stats').innerText = `Total: ${show.doorList.length} anotados (${show.doorList.filter(i=>i.paid).length} pagados)`;
       }
-    }
+    };
 
-    function filterDoorList() {
-      const query = removeAccents(document.getElementById('door-search').value);
+    window.filterDoorList = function() {
+      const query = window.removeAccents(document.getElementById('door-search').value);
       const rows = document.getElementById('door-table-body').getElementsByTagName('tr');
       for (let row of rows) {
         const nameCell = row.getElementsByTagName('td')[0];
         if (nameCell) {
-          const name = removeAccents(nameCell.innerText);
+          const name = window.removeAccents(nameCell.innerText);
           row.style.display = name.includes(query) ? '' : 'none';
         }
       }
-    }
+    };
 
-    function previewShowDirect(id) {
-      selectedShowId = id;
+    window.previewShowDirect = function(id) {
+      window.selectedShowId = id;
       loadPublicShow(id);
       toggleViewMode();
-    }
+    };
 
-    function previewCurrentShow() {
-      previewShowDirect(selectedShowId);
-    }
+    window.previewCurrentShow = function() {
+      previewShowDirect(window.selectedShowId);
+    };
 
-    // --- AGREGAR INVITADOS Y PRENSA ---
-    function openGuestModal() {
+    // --- INVITADOS Y PRENSA ---
+    window.openGuestModal = function() {
       document.getElementById('guest-name').value = '';
       document.getElementById('guest-type').value = 'Prensa';
       document.getElementById('guest-count').value = '1';
       document.getElementById('modal-guest').classList.remove('hidden');
-    }
+    };
 
-    function closeGuestModal() {
+    window.closeGuestModal = function() {
       document.getElementById('modal-guest').classList.add('hidden');
-    }
+    };
 
-    function saveGuestModal() {
-      const show = appData.shows.find(s => s.id === selectedShowId);
+    window.saveGuestModal = function() {
+      const show = window.appData.shows.find(s => s.id === window.selectedShowId);
       if (!show) return;
 
       const name = document.getElementById('guest-name').value.trim();
@@ -1030,20 +1130,20 @@
         paid: true
       });
 
-      saveDataToStorage();
+      window.saveShowToCloud(show);
       showToast(`Invitado ${name} agregado correctamente.`);
       closeGuestModal();
       renderDoorTable();
-      openShowDetail(selectedShowId);
-    }
+      openShowDetail(window.selectedShowId);
+    };
 
-    // --- EXPORTAR PDF PARA PUERTA ---
-    function exportDoorListPDF() {
-      const show = appData.shows.find(s => s.id === selectedShowId);
+    // --- EXPORTAR PDF PUERTA ---
+    window.exportDoorListPDF = function() {
+      const show = window.appData.shows.find(s => s.id === window.selectedShowId);
       if (!show) return;
 
       const printWindow = window.open('', '_blank');
-      const formattedDate = formatDateDisplay(show.dateVal);
+      const formattedDate = window.formatDateDisplay(show.dateVal);
       const totalRecaudado = show.doorList.filter(i => i.paid).reduce((sum, item) => sum + item.total, 0);
 
       const htmlContent = `
@@ -1063,7 +1163,7 @@
             th { background: #eee; font-weight: bold; }
             .status-ok { font-weight: bold; color: #27ae60; }
             .status-pending { color: #e67e22; }
-            @media print { body { padding: 0; } button { display: none; } }
+            @media print { body { padding: 0; } }
           </style>
         </head>
         <body>
@@ -1114,11 +1214,11 @@
 
       printWindow.document.write(htmlContent);
       printWindow.document.close();
-    }
+    };
 
     // --- BUSCADOR DE PUERTA ---
-    function openDoorSearchMode() {
-      const show = appData.shows.find(s => s.id === selectedShowId);
+    window.openDoorSearchMode = function() {
+      const show = window.appData.shows.find(s => s.id === window.selectedShowId);
       if (!show) return;
 
       document.getElementById('view-master').classList.add('hidden');
@@ -1126,36 +1226,35 @@
       document.getElementById('view-door-search').classList.remove('hidden');
 
       document.getElementById('door-search-title').innerText = show.title;
-      document.getElementById('door-search-subtitle').innerText = `📍 ${show.place} | 📅 ${formatDateDisplay(show.dateVal)}`;
+      document.getElementById('door-search-subtitle').innerText = `📍 ${show.place} | 📅 ${window.formatDateDisplay(show.dateVal)}`;
       document.getElementById('door-fast-input').value = '';
       
       renderDoorSearchCards();
-    }
+    };
 
-    function refreshDoorSearch() {
+    window.refreshDoorSearch = function() {
       loadDataFromStorage();
       renderDoorSearchCards();
       showToast("🔄 Listado actualizado");
-    }
+    };
 
-    function closeDoorSearchMode() {
+    window.closeDoorSearchMode = function() {
       document.getElementById('view-door-search').classList.add('hidden');
       document.getElementById('view-master').classList.remove('hidden');
       renderDoorTable();
-    }
+    };
 
-    function renderDoorSearchCards() {
-      const show = appData.shows.find(s => s.id === selectedShowId);
+    window.renderDoorSearchCards = function() {
+      const show = window.appData.shows.find(s => s.id === window.selectedShowId);
       if (!show) return;
 
-      const query = removeAccents(document.getElementById('door-fast-input').value);
+      const query = window.removeAccents(document.getElementById('door-fast-input').value);
       const container = document.getElementById('door-search-cards-container');
       container.innerHTML = '';
 
       let list = show.doorList;
-
       if (query) {
-        list = list.filter(i => removeAccents(i.name).includes(query));
+        list = list.filter(i => window.removeAccents(i.name).includes(query));
       }
 
       document.getElementById('door-search-count').innerText = `Mostrando ${list.length} de ${show.doorList.length}`;
@@ -1190,30 +1289,30 @@
           </div>
           <div style="display: flex; align-items: center; gap: 8px; background: #121214; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border);">
             <span style="font-size: 0.8rem; color: var(--text-muted);">Asistencia:</span>
-            <button class="qty-btn" onclick="updateTicketsEntered(${selectedShowId}, ${index}, -1)">-</button>
+            <button class="qty-btn" onclick="updateTicketsEntered(${window.selectedShowId}, ${index}, -1)">-</button>
             <span class="qty-value" style="font-size: 1.1rem; color: white;">${entered} / ${count}</span>
-            <button class="qty-btn" onclick="updateTicketsEntered(${selectedShowId}, ${index}, 1)">+</button>
+            <button class="qty-btn" onclick="updateTicketsEntered(${window.selectedShowId}, ${index}, 1)">+</button>
           </div>
         `;
         container.appendChild(card);
       });
-    }
+    };
 
-    function updateTicketsEntered(showId, index, change) {
-      const show = appData.shows.find(s => s.id === showId);
+    window.updateTicketsEntered = function(showId, index, change) {
+      const show = window.appData.shows.find(s => s.id === showId);
       if (show && show.doorList[index]) {
         const item = show.doorList[index];
         const max = item.ticketCount || 1;
         const current = item.ticketsEntered || 0;
         item.ticketsEntered = Math.max(0, Math.min(max, current + change));
-        saveDataToStorage();
+        window.saveShowToCloud(show);
         renderDoorSearchCards();
       }
-    }
+    };
 
     // --- BALANCE FINANCIERO ---
-    function openFinancialModal() {
-      const show = appData.shows.find(s => s.id === selectedShowId);
+    window.openFinancialModal = function() {
+      const show = window.appData.shows.find(s => s.id === window.selectedShowId);
       if (!show) return;
 
       if (!show.financials) {
@@ -1228,14 +1327,14 @@
       calculateFinancials();
 
       document.getElementById('modal-financial').classList.remove('hidden');
-    }
+    };
 
-    function closeFinancialModal() {
+    window.closeFinancialModal = function() {
       document.getElementById('modal-financial').classList.add('hidden');
-    }
+    };
 
     function renderSponsorRows() {
-      const show = appData.shows.find(s => s.id === selectedShowId);
+      const show = window.appData.shows.find(s => s.id === window.selectedShowId);
       const container = document.getElementById('fin-sponsors-container');
       container.innerHTML = '';
 
@@ -1251,7 +1350,7 @@
       });
     }
 
-    function addSponsorRow() {
+    window.addSponsorRow = function() {
       const container = document.getElementById('fin-sponsors-container');
       const div = document.createElement('div');
       div.className = 'fin-row';
@@ -1262,10 +1361,10 @@
       `;
       container.appendChild(div);
       calculateFinancials();
-    }
+    };
 
     function renderExpenseRows() {
-      const show = appData.shows.find(s => s.id === selectedShowId);
+      const show = window.appData.shows.find(s => s.id === window.selectedShowId);
       const container = document.getElementById('fin-expenses-container');
       container.innerHTML = '';
 
@@ -1281,7 +1380,7 @@
       });
     }
 
-    function addExpenseRow() {
+    window.addExpenseRow = function() {
       const container = document.getElementById('fin-expenses-container');
       const div = document.createElement('div');
       div.className = 'fin-row';
@@ -1292,10 +1391,10 @@
       `;
       container.appendChild(div);
       calculateFinancials();
-    }
+    };
 
-    function calculateFinancials() {
-      const show = appData.shows.find(s => s.id === selectedShowId);
+    window.calculateFinancials = function() {
+      const show = window.appData.shows.find(s => s.id === window.selectedShowId);
       if (!show) return;
 
       const paidItems = show.doorList.filter(i => i.paid);
@@ -1330,10 +1429,10 @@
       netElem.style.color = netProfit >= 0 ? "var(--success)" : "var(--accent)";
 
       document.getElementById('fin-per-person').innerText = `$${perPerson.toLocaleString('es-AR')} (c/u)`;
-    }
+    };
 
-    function saveFinancials() {
-      const show = appData.shows.find(s => s.id === selectedShowId);
+    window.saveFinancials = function() {
+      const show = window.appData.shows.find(s => s.id === window.selectedShowId);
       if (!show) return;
 
       let sponsors = [];
@@ -1354,14 +1453,14 @@
 
       show.financials = { sponsors, expenses, divideCount };
 
-      saveDataToStorage();
-      showToast("Balance financiero guardado");
+      window.saveShowToCloud(show);
+      showToast("Balance financiero guardado en la nube");
       closeFinancialModal();
-    }
+    };
 
-    function exportFinancialsPDF() {
+    window.exportFinancialsPDF = function() {
       saveFinancials();
-      const show = appData.shows.find(s => s.id === selectedShowId);
+      const show = window.appData.shows.find(s => s.id === window.selectedShowId);
       if (!show) return;
 
       const printWindow = window.open('', '_blank');
@@ -1402,7 +1501,7 @@
             <h1>Simón Dice - Rendición de Cuentas y Liquidación</h1>
             <div class="meta">
               <strong>Evento:</strong> ${show.title}<br>
-              <strong>Fecha:</strong> ${formatDateDisplay(show.dateVal)} | <strong>Lugar:</strong> ${show.place}
+              <strong>Fecha:</strong> ${window.formatDateDisplay(show.dateVal)} | <strong>Lugar:</strong> ${show.place}
             </div>
           </div>
 
@@ -1442,33 +1541,34 @@
 
       printWindow.document.write(htmlContent);
       printWindow.document.close();
-    }
+    };
 
     // --- VISTA COMPRADOR ---
-    function populatePublicShowSelector() {
+    window.populatePublicShowSelector = function() {
       const selector = document.getElementById('public-show-selector');
+      if (!selector) return;
       selector.innerHTML = '';
-      appData.shows.forEach(s => {
+      window.appData.shows.forEach(s => {
         const opt = document.createElement('option');
         opt.value = s.id;
-        opt.innerText = `${s.title} (${getBuyerUrl(s)})`;
+        opt.innerText = `${s.title} (${window.getBuyerUrl(s)})`;
         selector.appendChild(opt);
       });
-      if (appData.shows.length > 0) {
-        selector.value = selectedShowId;
+      if (window.appData.shows.length > 0) {
+        selector.value = window.selectedShowId;
       }
-    }
+    };
 
-    function loadPublicShow(showId) {
+    window.loadPublicShow = function(showId) {
       const id = parseInt(showId);
-      const show = appData.shows.find(s => s.id === id);
+      const show = window.appData.shows.find(s => s.id === id);
       if (!show) return;
 
-      selectedShowId = id;
-      publicQuantities = {};
+      window.selectedShowId = id;
+      window.publicQuantities = {};
 
       document.getElementById('pub-show-title').innerText = show.title;
-      document.getElementById('pub-show-place').innerText = `📍 Lugar: ${show.place} (${formatDateDisplay(show.dateVal)})`;
+      document.getElementById('pub-show-place').innerText = `📍 Lugar: ${show.place} (${window.formatDateDisplay(show.dateVal)})`;
       document.getElementById('pub-show-time').innerText = `🕒 Puertas: ${show.timeDoors} | Show: ${show.timeShow}`;
       document.getElementById('pub-alias-display').innerText = show.alias;
 
@@ -1476,11 +1576,8 @@
       const pastBadge = document.getElementById('pub-past-badge');
       const btnConfirm = document.getElementById('btn-confirm-name');
 
-      if (isShowPast(show.dateVal)) {
-        pastBadge.classList.remove('hidden');
-      } else {
-        pastBadge.classList.add('hidden');
-      }
+      if (window.isShowPast(show.dateVal)) pastBadge.classList.remove('hidden');
+      else pastBadge.classList.add('hidden');
 
       if (show.status === 'active') {
         badge.className = "status-badge status-active";
@@ -1498,7 +1595,7 @@
       container.innerHTML = '';
 
       show.ticketTypes.forEach(t => {
-        publicQuantities[t.id] = 0;
+        window.publicQuantities[t.id] = 0;
         const mult = t.multiplier || 1;
 
         const row = document.createElement('div');
@@ -1521,44 +1618,44 @@
 
       calculatePublicTotal();
       clearBuyerNameError();
-    }
+    };
 
-    function changePublicQty(ticketId, change, price) {
-      const show = appData.shows.find(s => s.id === selectedShowId);
+    window.changePublicQty = function(ticketId, change) {
+      const show = window.appData.shows.find(s => s.id === window.selectedShowId);
       if (show.status !== 'active') return;
 
-      publicQuantities[ticketId] = Math.max(0, (publicQuantities[ticketId] || 0) + change);
-      document.getElementById(`pub-qty-${ticketId}`).innerText = publicQuantities[ticketId];
+      window.publicQuantities[ticketId] = Math.max(0, (window.publicQuantities[ticketId] || 0) + change);
+      document.getElementById(`pub-qty-${ticketId}`).innerText = window.publicQuantities[ticketId];
       calculatePublicTotal();
-    }
+    };
 
     function calculatePublicTotal() {
-      const show = appData.shows.find(s => s.id === selectedShowId);
+      const show = window.appData.shows.find(s => s.id === window.selectedShowId);
       if (!show) return;
 
       let total = 0;
       show.ticketTypes.forEach(t => {
-        const qty = publicQuantities[t.id] || 0;
+        const qty = window.publicQuantities[t.id] || 0;
         total += qty * t.price;
       });
 
       document.getElementById('pub-total-amount').innerText = `$${total.toLocaleString('es-AR')}`;
     }
 
-    function copyAliasPublic() {
+    window.copyAliasPublic = function() {
       const alias = document.getElementById('pub-alias-display').innerText;
-      copyTextToClipboard(alias, "Alias copiado al portapapeles");
-    }
+      window.copyTextToClipboard(alias, "Alias copiado al portapapeles");
+    };
 
-    function clearBuyerNameError() {
+    window.clearBuyerNameError = function() {
       const input = document.getElementById('pub-buyer-name');
       input.style.borderColor = 'var(--border)';
       input.style.background = '#16161a';
       document.getElementById('pub-name-error-box').classList.add('hidden');
-    }
+    };
 
-    function submitBooking() {
-      const show = appData.shows.find(s => s.id === selectedShowId);
+    window.submitBooking = function() {
+      const show = window.appData.shows.find(s => s.id === window.selectedShowId);
       if (!show || show.status !== 'active') {
         showToast("La venta para este show no está activa.");
         return;
@@ -1583,7 +1680,7 @@
       let totalTickets = 0;
 
       show.ticketTypes.forEach(t => {
-        const qty = publicQuantities[t.id] || 0;
+        const qty = window.publicQuantities[t.id] || 0;
         if (qty > 0) {
           const mult = t.multiplier || 1;
           const accesses = qty * mult;
@@ -1609,21 +1706,21 @@
       };
 
       show.doorList.push(booking);
-      saveDataToStorage();
+      window.saveShowToCloud(show);
 
-      showToast(`¡Gracias ${name}! Quedaste anotado/a en la lista de puerta.`);
+      showToast(`¡Gracias ${name}! Quedaste anotado/a en la lista en vivo.`);
 
       document.getElementById('pub-buyer-name').value = '';
-      loadPublicShow(selectedShowId);
+      loadPublicShow(window.selectedShowId);
 
-      if (currentViewMode === 'master') {
+      if (window.currentViewMode === 'master') {
         renderDoorTable();
       }
-    }
+    };
 
-    // --- MODAL SHOW (CREAR / EDITAR) ---
-    function openNewShowModal() {
-      editingShowId = null;
+    // --- MODAL CREAR / EDITAR SHOW ---
+    window.openNewShowModal = function() {
+      window.editingShowId = null;
       document.getElementById('modal-title').innerText = "Crear Nuevo Show";
       document.getElementById('form-title').value = "";
       document.getElementById('form-date-val').value = new Date().toISOString().split('T')[0];
@@ -1639,15 +1736,15 @@
       addTicketTypeForm("General", 10000, 1);
 
       document.getElementById('modal-show').classList.remove('hidden');
-    }
+    };
 
-    function editCurrentShow() {
-      openEditShowModal(selectedShowId);
-    }
+    window.editCurrentShow = function() {
+      openEditShowModal(window.selectedShowId);
+    };
 
-    function openEditShowModal(id) {
-      editingShowId = id;
-      const show = appData.shows.find(s => s.id === id);
+    window.openEditShowModal = function(id) {
+      window.editingShowId = id;
+      const show = window.appData.shows.find(s => s.id === id);
       if (!show) return;
 
       document.getElementById('modal-title').innerText = "Editar Show";
@@ -1667,13 +1764,13 @@
       });
 
       document.getElementById('modal-show').classList.remove('hidden');
-    }
+    };
 
-    function closeShowModal() {
+    window.closeShowModal = function() {
       document.getElementById('modal-show').classList.add('hidden');
-    }
+    };
 
-    function addTicketTypeForm(name = "", price = "", multiplier = 1) {
+    window.addTicketTypeForm = function(name = "", price = "", multiplier = 1) {
       const container = document.getElementById('form-tickets-list');
       const div = document.createElement('div');
       div.className = 'form-ticket-row';
@@ -1691,9 +1788,9 @@
         <button class="btn btn-secondary btn-small" onclick="this.parentElement.remove()" style="padding:0 10px;">✕</button>
       `;
       container.appendChild(div);
-    }
+    };
 
-    function saveShowModal() {
+    window.saveShowModal = function() {
       const title = document.getElementById('form-title').value.trim();
       if (!title) {
         showToast("Por favor ingresá un nombre para el show.");
@@ -1720,7 +1817,7 @@
 
       let newId = null;
 
-      if (editingShowId === null) {
+      if (window.editingShowId === null) {
         newId = Date.now();
         const newShow = {
           id: newId,
@@ -1736,11 +1833,12 @@
           doorList: [],
           financials: { sponsors: [], expenses: [], divideCount: 4 }
         };
-        appData.shows.push(newShow);
-        selectedShowId = newId;
-        showToast("Nuevo show creado exitosamente");
+        window.appData.shows.push(newShow);
+        window.selectedShowId = newId;
+        window.saveShowToCloud(newShow);
+        showToast("Nuevo show creado y guardado en la nube");
       } else {
-        const show = appData.shows.find(s => s.id === editingShowId);
+        const show = window.appData.shows.find(s => s.id === window.editingShowId);
         if (show) {
           show.title = title;
           show.dateVal = document.getElementById('form-date-val').value;
@@ -1751,21 +1849,21 @@
           show.capacity = capacity;
           show.status = document.getElementById('form-status').value;
           show.ticketTypes = ticketTypes;
-          showToast("Show actualizado exitosamente");
+          window.saveShowToCloud(show);
+          showToast("Show actualizado en la nube");
         }
       }
 
-      saveDataToStorage();
       closeShowModal();
       renderDashboard();
       populatePublicShowSelector();
 
       if (newId !== null) {
         openShowDetail(newId);
-      } else if (editingShowId !== null && document.getElementById('master-show-detail').classList.contains('hidden') === false) {
-        openShowDetail(editingShowId);
+      } else if (window.editingShowId !== null && document.getElementById('master-show-detail').classList.contains('hidden') === false) {
+        openShowDetail(window.editingShowId);
       }
-    }
+    };
   </script>
 </body>
 </html>
