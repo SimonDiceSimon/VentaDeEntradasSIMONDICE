@@ -122,8 +122,8 @@
   <!-- SCRIPT DE RUTEO INMEDIATO (Oculta panel admin en el milisegundo 0 si entra por enlace público) -->
   <script>
     (function() {
-      var params = new URLSearchParams(window.location.search);
-      if (params.has('evento') || params.has('puerta') || params.has('show') || params.has('door')) {
+      var search = window.location.search;
+      if (search.includes('evento=') || search.includes('puerta=') || search.includes('show=') || search.includes('door=')) {
         document.documentElement.classList.add('direct-link-mode');
         var style = document.createElement('style');
         style.innerHTML = '#app-top-bar, #view-master, #public-selector-bar { display: none !important; }';
@@ -144,6 +144,7 @@
       <div class="cloud-badge" id="cloud-status">☁️ Conectando a la Nube...</div>
     </div>
     <div style="display: flex; gap: 8px;">
+      <button class="btn btn-secondary btn-small" onclick="forceCloudSync()">☁️ Forzar Subida Nube</button>
       <button class="btn btn-secondary btn-small" onclick="toggleViewMode()">Cambiar Vista</button>
     </div>
   </div>
@@ -586,7 +587,6 @@
       return str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
     };
 
-    // --- GENERADOR DE SLUG LIMPIO PARA URL (Solo nombre del show) ---
     window.slugifyTitle = function(title) {
       if (!title) return 'evento';
       return window.removeAccents(title)
@@ -595,7 +595,6 @@
         .replace(/^-|-$/g, '');
     };
 
-    // --- DETECCIÓN AUTOMÁTICA DE MULTIPLICADOR (2x1, 3x2, etc.) ---
     window.autoDetectMultiplier = function(name) {
       if (!name) return 1;
       const clean = window.removeAccents(name.toLowerCase());
@@ -605,7 +604,7 @@
       return 1;
     };
 
-    // --- CONEXIÓN A LA NUBE Y SINCRONIZACIÓN EN VIVO ---
+    // --- CONEXIÓN A LA NUBE Y AUTO-INICIALIZACIÓN (AUTO-SEEDING) ---
     async function initCloudAuth() {
       if (!auth) return;
       try {
@@ -632,7 +631,11 @@
         const showsCol = collection(db, 'artifacts', appId, 'public', 'data', 'shows');
 
         onSnapshot(showsCol, (snapshot) => {
-          if (!snapshot.empty) {
+          if (snapshot.empty) {
+            // Si la base de datos está vacía, subimos automáticamente los shows a la nube
+            console.log("Base de datos vacía. Subiendo datos iniciales...");
+            window.appData.shows.forEach(s => window.saveShowToCloud(s));
+          } else {
             const fetchedShows = [];
             snapshot.forEach((docSnap) => {
               fetchedShows.push(docSnap.data());
@@ -646,10 +649,20 @@
         }, (error) => {
           console.error("Error en sincronización en vivo:", error);
           const cloudBadge = document.getElementById('cloud-status');
-          if (cloudBadge) cloudBadge.innerHTML = "🔴 Modo Local";
+          if (cloudBadge) cloudBadge.innerHTML = "🟡 Modo Local / Reconectando";
         });
       });
     }
+
+    window.forceCloudSync = async function() {
+      showToast("☁️ Forzando subida a la nube...");
+      if (window.appData.shows.length > 0) {
+        for (let s of window.appData.shows) {
+          await window.saveShowToCloud(s);
+        }
+        showToast("✅ Shows sincronizados en la Nube");
+      }
+    };
 
     window.saveShowToCloud = async function(show) {
       saveDataToStorage();
@@ -675,23 +688,26 @@
       }
     }
 
-    // --- INICIALIZACIÓN GENERAL Y RUTEO SIN PARPADEO ---
+    // --- INICIALIZACIÓN GENERAL Y RUTEO DE EMERGENCIA PARA SAFARI/IPAD ---
     window.onload = async function() {
       loadDataFromStorage();
+      
+      // Fallback de renderizado en 1.5 segundos por si Safari demora Firebase
+      setTimeout(() => {
+        const routed = checkURLParams();
+        if (!routed) {
+          renderDashboard();
+          populatePublicShowSelector();
+          if (window.appData.shows.length > 0) {
+            loadPublicShow(window.appData.shows[0].id);
+          }
+        }
+      }, 1200);
+
       await initCloudAuth();
       setupCloudSync();
-
-      const routed = checkURLParams();
-      if (!routed) {
-        renderDashboard();
-        populatePublicShowSelector();
-        if (window.appData.shows.length > 0) {
-          loadPublicShow(window.appData.shows[0].id);
-        }
-      }
     };
 
-    // --- GENERADOR DE ENLACES LINDOS SIN ID NUMÉRICO NI 'show1' ---
     function getBaseUrl() {
       return window.location.href.split('?')[0].split('#')[0];
     }
@@ -731,13 +747,14 @@
       setTimeout(() => { toast.style.display = 'none'; }, 3000);
     };
 
-    // --- RUTEO INTELIGENTE POR NOMBRE DE EVENTO EN URL ---
+    // --- RUTEO RESISTENTE CON LIMPIEZA DE URL PARA IPAD ---
     window.checkURLParams = function() {
       const urlParams = new URLSearchParams(window.location.search);
-      const eventoParam = urlParams.get('evento') || urlParams.get('show');
-      const puertaParam = urlParams.get('puerta') || urlParams.get('door');
+      let eventoParam = urlParams.get('evento') || urlParams.get('show');
+      let puertaParam = urlParams.get('puerta') || urlParams.get('door');
 
       if (eventoParam) {
+        eventoParam = eventoParam.replace(/\/$/, '').trim();
         const show = window.appData.shows.find(s => window.slugifyTitle(s.title) === eventoParam || s.id == eventoParam);
 
         document.getElementById('app-top-bar').classList.add('hidden');
@@ -750,10 +767,15 @@
           window.selectedShowId = show.id;
           window.currentViewMode = 'public';
           loadPublicShow(show.id);
+        } else if (window.appData.shows.length > 0) {
+          window.selectedShowId = window.appData.shows[0].id;
+          window.currentViewMode = 'public';
+          loadPublicShow(window.appData.shows[0].id);
         }
         return true;
 
       } else if (puertaParam) {
+        puertaParam = puertaParam.replace(/\/$/, '').trim();
         const show = window.appData.shows.find(s => window.slugifyTitle(s.title) === puertaParam || s.id == puertaParam);
 
         document.getElementById('app-top-bar').classList.add('hidden');
@@ -764,6 +786,9 @@
 
         if (show) {
           window.selectedShowId = show.id;
+          openDoorSearchMode();
+        } else if (window.appData.shows.length > 0) {
+          window.selectedShowId = window.appData.shows[0].id;
           openDoorSearchMode();
         }
         return true;
@@ -835,7 +860,6 @@
       renderDashboard();
     };
 
-    // --- MEMORIA LOCAL FALLBACK ---
     function loadDataFromStorage() {
       try {
         const saved = localStorage.getItem('simon_dice_app_data');
@@ -857,7 +881,6 @@
     // --- CÁLCULO DE LOCALIDADES OCUPADAS (SOLO CONFIRMADAS/PAGADAS) ---
     window.calculateTotalAccessesBooked = function(show) {
       if (!show || !show.doorList) return 0;
-      // ÚNICAMENTE se descuentan del cupo total las localidades de compras marcadas como PAGADAS
       return show.doorList.filter(i => i.paid).reduce((sum, item) => sum + (item.ticketCount || 1), 0);
     };
 
@@ -1669,7 +1692,6 @@
         return;
       }
 
-      // Validación de capacidad respecto a entradas confirmadas/pagadas
       const paidBooked = window.calculateTotalAccessesBooked(show);
       const capacity = show.capacity || 100;
       if (paidBooked + requestedAccesses > capacity) {
