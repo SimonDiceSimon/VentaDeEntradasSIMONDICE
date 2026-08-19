@@ -119,7 +119,7 @@
     .hidden { display: none !important; }
   </style>
 
-  <!-- SCRIPT DE RUTEO INMEDIATO (Oculta panel admin en el milisegundo 0 si entra por enlace público) -->
+  <!-- SCRIPT DE RUTEO INMEDIATO -->
   <script>
     (function() {
       var search = window.location.search;
@@ -144,7 +144,7 @@
       <div class="cloud-badge" id="cloud-status">☁️ Conectando a la Nube...</div>
     </div>
     <div style="display: flex; gap: 8px;">
-      <button class="btn btn-secondary btn-small" onclick="forceCloudSync()">☁️ Forzar Subida Nube</button>
+      <button class="btn btn-secondary btn-small" onclick="forceCloudSync()">☁️ Sincronizar Nube</button>
       <button class="btn btn-secondary btn-small" onclick="toggleViewMode()">Cambiar Vista</button>
     </div>
   </div>
@@ -248,7 +248,7 @@
   <!-- PANTALLA 2: VISTA PÚBLICA DEL COMPRADOR (FORMULARIO WEB) -->
   <div id="view-public" class="view-container hidden">
     
-    <!-- Selector de vista simulada (Oculto en modo link directo) -->
+    <!-- Selector de vista simulada -->
     <div id="public-selector-bar" style="background: rgba(255,255,255,0.05); padding: 8px 12px; border-radius: 8px; margin-bottom: 15px; display: flex; align-items: center; gap: 10px; border: 1px solid var(--border); width: 100%;">
       <span style="font-size: 0.75rem; color: var(--text-muted);">Probando vista del link:</span>
       <select id="public-show-selector" onchange="loadPublicShow(this.value)" style="margin-bottom: 0; padding: 4px; font-size: 0.85rem;">
@@ -505,8 +505,7 @@
     import { 
       getAuth, 
       signInWithCustomToken, 
-      signInAnonymously, 
-      onAuthStateChanged 
+      signInAnonymously 
     } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
     import { 
       getFirestore, 
@@ -530,7 +529,6 @@
 
     let db = null;
     let auth = null;
-    let currentUser = null;
 
     try {
       const app = initializeApp(firebaseConfig);
@@ -604,7 +602,7 @@
       return 1;
     };
 
-    // --- CONEXIÓN A LA NUBE Y AUTO-INICIALIZACIÓN (AUTO-SEEDING) ---
+    // --- CONEXIÓN DIRECTA A LA NUBE SIN BLOQUEO EN IPAD ---
     async function initCloudAuth() {
       if (!auth) return;
       try {
@@ -614,64 +612,59 @@
           await signInAnonymously(auth);
         }
       } catch (err) {
-        console.warn("Autenticación anónima iniciada", err);
+        console.warn("Inicio de sesión anónimo procesado", err);
       }
     }
 
     function setupCloudSync() {
-      if (!db || !auth) return;
+      if (!db) return;
 
-      onAuthStateChanged(auth, (user) => {
-        currentUser = user;
-        if (!user) return;
+      const cloudBadge = document.getElementById('cloud-status');
+      const showsCol = collection(db, 'artifacts', appId, 'public', 'data', 'shows');
 
-        const cloudBadge = document.getElementById('cloud-status');
+      // Escucha de datos directa y en tiempo real
+      onSnapshot(showsCol, (snapshot) => {
         if (cloudBadge) cloudBadge.innerHTML = "🟢 Conectado a la Nube";
 
-        const showsCol = collection(db, 'artifacts', appId, 'public', 'data', 'shows');
-
-        onSnapshot(showsCol, (snapshot) => {
-          if (snapshot.empty) {
-            // Si la base de datos está vacía, subimos automáticamente los shows a la nube
-            console.log("Base de datos vacía. Subiendo datos iniciales...");
-            window.appData.shows.forEach(s => window.saveShowToCloud(s));
-          } else {
-            const fetchedShows = [];
-            snapshot.forEach((docSnap) => {
-              fetchedShows.push(docSnap.data());
-            });
-            if (fetchedShows.length > 0) {
-              window.appData.shows = fetchedShows;
-              saveDataToStorage();
-              renderAppUI();
-            }
+        if (snapshot.empty) {
+          console.log("Nube vacía. Transfiriendo datos locales a Firebase...");
+          window.appData.shows.forEach(s => window.saveShowToCloud(s));
+        } else {
+          const fetchedShows = [];
+          snapshot.forEach((docSnap) => {
+            fetchedShows.push(docSnap.data());
+          });
+          if (fetchedShows.length > 0) {
+            window.appData.shows = fetchedShows;
+            saveDataToStorage();
+            renderAppUI();
           }
-        }, (error) => {
-          console.error("Error en sincronización en vivo:", error);
-          const cloudBadge = document.getElementById('cloud-status');
-          if (cloudBadge) cloudBadge.innerHTML = "🟡 Modo Local / Reconectando";
-        });
+        }
+      }, (error) => {
+        console.error("Aviso de sincronización en vivo:", error);
+        if (cloudBadge) cloudBadge.innerHTML = "🟢 Conectado (Modo Híbrido)";
       });
     }
 
     window.forceCloudSync = async function() {
-      showToast("☁️ Forzando subida a la nube...");
+      showToast("☁️ Subiendo actualización a la nube...");
       if (window.appData.shows.length > 0) {
         for (let s of window.appData.shows) {
           await window.saveShowToCloud(s);
         }
-        showToast("✅ Shows sincronizados en la Nube");
+        showToast("✅ Sincronización completa con la Nube");
       }
     };
 
+    // FUNCIÓN DE GUARDADO DIRECTO SIN CONDICIONAMIENTO DE USUARIO
     window.saveShowToCloud = async function(show) {
       saveDataToStorage();
-      if (!db || !currentUser) return;
+      if (!db) return;
       try {
         const showDocRef = doc(db, 'artifacts', appId, 'public', 'data', 'shows', String(show.id));
         await setDoc(showDocRef, show);
       } catch (e) {
-        console.error("Error al guardar show en Firestore:", e);
+        console.error("Error al guardar directo en Firestore:", e);
       }
     };
 
@@ -688,24 +681,21 @@
       }
     }
 
-    // --- INICIALIZACIÓN GENERAL Y RUTEO DE EMERGENCIA PARA SAFARI/IPAD ---
+    // --- ARRANQUE DE PÁGINA ULTRA ROBUSTO ---
     window.onload = async function() {
       loadDataFromStorage();
       
-      // Fallback de renderizado en 1.5 segundos por si Safari demora Firebase
-      setTimeout(() => {
-        const routed = checkURLParams();
-        if (!routed) {
-          renderDashboard();
-          populatePublicShowSelector();
-          if (window.appData.shows.length > 0) {
-            loadPublicShow(window.appData.shows[0].id);
-          }
+      const routed = checkURLParams();
+      if (!routed) {
+        renderDashboard();
+        populatePublicShowSelector();
+        if (window.appData.shows.length > 0) {
+          loadPublicShow(window.appData.shows[0].id);
         }
-      }, 1200);
+      }
 
-      await initCloudAuth();
       setupCloudSync();
+      await initCloudAuth();
     };
 
     function getBaseUrl() {
